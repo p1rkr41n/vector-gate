@@ -1,0 +1,360 @@
+# ==============================================================================
+# VECTOR WITH PHASE 0: GATE (TYPE: ANY) - FULL 15 PUSH PROTOCOLS MAPPING
+# ZERO-PORT AUTO-WIRING & ZERO-STUCK TERMINAL FALLBACK (gates.other)
+# ==============================================================================
+
+data_dir: "/var/lib/vector"
+
+# PHASE 0: INGRESS GATE (TYPE: ANY) - ZERO-PORT AUTO-WIRING & FALLBACK
+gates:
+  enabled: true                    # Bật hoặc tắt Phase Gate
+  type: "any"                      # Duy nhất một loại "any" (Tự phân loại đa giao thức)
+  address: "0.0.0.0:5000"          # Cổng đón tiếp nhận duy nhất cho toàn bộ hệ thống
+
+  options:
+    zero_copy: true                # Tối ưu hóa Zero-Copy Kernel splice(2)
+    reuse_port: true               # SO_REUSEPORT trên toàn bộ CPU Cores
+    defer_accept: true             # TCP_DEFER_ACCEPT đánh thức khi có dữ liệu
+    tcp_nodelay: true              # Vô hiệu hóa Nagle algorithm (Low latency)
+    inspect_timeout_ms: 200        # Chờ tối đa 200ms cho byte đầu
+    sniff_window_bytes: 512        # Kích thước bộ đệm nhận dạng chữ ký
+    pipe_buffer: 64                # Kích thước đường kính ống pipe theo số page (1-256 pages, 1 page = 4KB).
+                                   # Mặc định là 16 (64KB). Nếu set = 0 hoặc bỏ trống sẽ lấy mặc định (16).
+                                   # Ví dụ: 16 (64KB), 64 (256KB), 128 (512KB), 256 (1MB max).
+    pipe_adaptive: true            # Tự động co giãn đàn hồi kích thước pipe theo tải thực tế
+    vrl_dir: "/etc/vector/vrl"     # Thư mục drop-in VRL parsing plugins
+    vrl_watch: true                # Tự động theo dõi và nạp nóng parser khi thả file .vrl
+
+  # BẢNG ĐỊNH TUYẾN DẠNG MAP ĐỒNG NHẤT VỚI VECTOR SOURCES (FIRST-MATCH-WINS)
+  # Không cần gán target thủ công! Gate tự động cấp phát port nội bộ ngầm
+  # và đấu nối trực tiếp vào sources có address: "gates.<tên_gate>"
+  routes:
+    # 1. Tùy biến chữ ký nhị phân Base64 (type: "any", offset mặc định = 0)
+    custom_binary_iot:
+      type: "any"
+      magic_base64: "3q2+7w=="        # 4 bytes: 0xDEADBEEF
+
+    custom_app_signature:
+      type: "any"
+      magic_base64: "TVlMT0c="        # ASCII: "MYLOG"
+
+    custom_offset_signature:
+      type: "any"
+      magic_base64: "TUFHSUM="        # ASCII: "MAGIC" tại offset = 4
+      offset: 4
+
+    # 2. Giao thức chuẩn dựng sẵn (trùng khớp với type trong sources)
+    syslog_gate:
+      type: "syslog"
+
+    beats_gate:
+      type: "logstash"
+
+    fluent_gate:
+      type: "fluent"
+
+    vector_gate:
+      type: "vector"
+
+    dnstap_gate:
+      type: "dnstap"
+
+    splunk_gate:
+      type: "splunk_hec"
+
+    datadog_gate:
+      type: "datadog_agent"
+
+    firehose_gate:
+      type: "aws_kinesis_firehose"
+
+    heroku_gate:
+      type: "heroku_logs"
+
+    prom_rw_gate:
+      type: "prometheus_remote_write"
+
+    prom_pg_gate:
+      type: "prometheus_pushgateway"
+
+    otel_gate:
+      type: "opentelemetry"
+
+    statsd_gate:
+      type: "statsd"
+
+    http_gate:
+      type: "http_server"
+
+    # 3. Terminal Fallback tự động: "other"
+    # Luôn tự động kích hoạt để đón mọi traffic lạ, không bao giờ làm tắc nghẽn kênh!
+    other:
+      type: "socket"
+
+# PHASE 1: VECTOR SOURCES (Đúng 15 Sources Push từ vector_sources.csv)
+# Sử dụng cú pháp auto-wiring address: "gates.<gate_name>"
+sources:
+  # 1. Custom Routes
+  in_custom_iot:
+    type: socket
+    mode: tcp
+    address: "gates.custom_binary_iot"
+    decoding:
+      codec: bytes
+
+  in_custom_app:
+    type: socket
+    mode: tcp
+    address: "gates.custom_app_signature"
+    decoding:
+      codec: bytes
+
+  in_custom_offset:
+    type: socket
+    mode: tcp
+    address: "gates.custom_offset_signature"
+    decoding:
+      codec: bytes
+
+  # 2. Predefined Protocol Sources
+  in_syslog:
+    type: syslog
+    mode: tcp
+    address: "gates.syslog_gate"
+
+  in_beats:
+    type: logstash
+    address: "gates.beats_gate"
+
+  in_fluent:
+    type: fluent
+    mode: tcp
+    address: "gates.fluent_gate"
+
+  in_splunk:
+    type: splunk_hec
+    address: "gates.splunk_gate"
+
+  in_datadog:
+    type: datadog_agent
+    address: "gates.datadog_gate"
+
+  in_aws_firehose:
+    type: aws_kinesis_firehose
+    address: "gates.firehose_gate"
+    store_access_key: false
+
+  in_heroku:
+    type: heroku_logs
+    address: "gates.heroku_gate"
+
+  in_prom_rw:
+    type: prometheus_remote_write
+    address: "gates.prom_rw_gate"
+    path: "/api/v1/write"
+
+  in_prom_pg:
+    type: prometheus_pushgateway
+    address: "gates.prom_pg_gate"
+
+  in_opentelemetry:
+    type: opentelemetry
+    grpc:
+      address: "127.0.0.1:14317"
+    http:
+      address: "gates.otel_gate"
+
+  in_vector_native:
+    type: vector
+    address: "gates.vector_gate"
+
+  in_statsd:
+    type: statsd
+    mode: tcp
+    address: "gates.statsd_gate"
+
+  in_dnstap:
+    type: dnstap
+    mode: tcp
+    address: "gates.dnstap_gate"
+
+  in_http:
+    type: http_server
+    address: "gates.http_gate"
+    decoding:
+      codec: bytes
+
+  # 3. Terminal Fallback Source (gates.other)
+  other_unmatched:
+    type: socket
+    mode: tcp
+    address: "gates.other"
+    decoding:
+      codec: bytes
+
+# PHASE 2: TRANSFORMS (GÁN TRƯỜNG type_log CHO TỪNG CỔNG SOURCE RA)
+transforms:
+  tag_custom_iot:
+    type: remap
+    inputs: ["in_custom_iot"]
+    source: |
+      .type_log = "custom_binary_iot"
+      .source_id = "in_custom_iot"
+      .ingress_port = 5000
+
+  tag_custom_app:
+    type: remap
+    inputs: ["in_custom_app"]
+    source: |
+      .type_log = "custom_app_signature"
+      .source_id = "in_custom_app"
+      .ingress_port = 5000
+
+  tag_custom_offset:
+    type: remap
+    inputs: ["in_custom_offset"]
+    source: |
+      .type_log = "custom_offset_signature"
+      .source_id = "in_custom_offset"
+      .ingress_port = 5000
+
+  tag_syslog:
+    type: remap
+    inputs: ["in_syslog"]
+    source: |
+      .type_log = "syslog"
+      .source_id = "in_syslog"
+      .ingress_port = 5000
+
+  tag_beats:
+    type: remap
+    inputs: ["in_beats"]
+    source: |
+      .type_log = "beats_lumberjack"
+      .source_id = "in_beats"
+      .ingress_port = 5000
+
+  tag_fluent:
+    type: remap
+    inputs: ["in_fluent"]
+    source: |
+      .type_log = "fluent_forward"
+      .source_id = "in_fluent"
+      .ingress_port = 5000
+
+  tag_splunk:
+    type: remap
+    inputs: ["in_splunk"]
+    source: |
+      .type_log = "splunk_hec"
+      .source_id = "in_splunk"
+      .ingress_port = 5000
+
+  tag_datadog:
+    type: remap
+    inputs: ["in_datadog"]
+    source: |
+      .type_log = "datadog_agent"
+      .source_id = "in_datadog"
+      .ingress_port = 5000
+
+  tag_aws_firehose:
+    type: remap
+    inputs: ["in_aws_firehose"]
+    source: |
+      .type_log = "aws_kinesis_firehose"
+      .source_id = "in_aws_firehose"
+      .ingress_port = 5000
+
+  tag_heroku:
+    type: remap
+    inputs: ["in_heroku"]
+    source: |
+      .type_log = "heroku_logs"
+      .source_id = "in_heroku"
+      .ingress_port = 5000
+
+  tag_prom_rw:
+    type: remap
+    inputs: ["in_prom_rw"]
+    source: |
+      .type_log = "prometheus_remote_write"
+      .source_id = "in_prom_rw"
+      .ingress_port = 5000
+
+  tag_prom_pg:
+    type: remap
+    inputs: ["in_prom_pg"]
+    source: |
+      .type_log = "prometheus_pushgateway"
+      .source_id = "in_prom_pg"
+      .ingress_port = 5000
+
+  tag_opentelemetry:
+    type: remap
+    inputs: ["in_opentelemetry.logs"]
+    source: |
+      .type_log = "opentelemetry"
+      .source_id = "in_opentelemetry"
+      .ingress_port = 5000
+
+  tag_vector_native:
+    type: remap
+    inputs: ["in_vector_native"]
+    source: |
+      .type_log = "vector_native"
+      .source_id = "in_vector_native"
+      .ingress_port = 5000
+
+  tag_statsd:
+    type: remap
+    inputs: ["in_statsd"]
+    source: |
+      .type_log = "statsd"
+      .source_id = "in_statsd"
+      .ingress_port = 5000
+
+  tag_dnstap:
+    type: remap
+    inputs: ["in_dnstap"]
+    source: |
+      .type_log = "dnstap"
+      .source_id = "in_dnstap"
+      .ingress_port = 5000
+
+  tag_http:
+    type: remap
+    inputs: ["in_http"]
+    source: |
+      .type_log = "http_server"
+      .source_id = "in_http"
+      .ingress_port = 5000
+
+  tag_other_unmatched:
+    type: remap
+    inputs: ["other_unmatched"]
+    source: |
+      .type_log = "other_unmatched"
+      .source_id = "other_unmatched"
+      .ingress_port = 5000
+
+  # UNIVERSAL PARSING ENGINE TRANSFORM (Tự động nạp code từ thư mục dir:)
+  universal_parser:
+    type: auto_remap
+    inputs: ["tag_*"]
+    dir: "/etc/vector/vrl"
+
+# PHASE 3: SINKS
+sinks:
+  # Primary Data File Sink: Ghi toàn bộ các log sau khi qua Universal Parser
+  file_output:
+    type: file
+    inputs: ["universal_parser"]
+    path: "/var/log/vector/forwarded_logs.ndjson"
+    encoding:
+      codec: json
+
+  # Blackhole Sink cho unmatched traffic
+  blackhole_sink:
+    type: blackhole
+    inputs: ["tag_other_unmatched"]

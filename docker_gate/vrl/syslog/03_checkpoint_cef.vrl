@@ -1,0 +1,12 @@
+#---
+# match_prefix: "CEF:"
+# scope: syslog
+# vendor: CheckPoint
+# priority: 3
+#---
+parsed, err = parse_regex(.message, r'^CEF:(?P<cef_ver>\d+)\|(?P<vendor>[^|]+)\|(?P<product>[^|]+)\|(?P<version>[^|]+)\|(?P<sig_id>[^|]+)\|(?P<name>[^|]+)\|(?P<severity>[^|]+)\|(.*)')
+if err == null {
+    . = merge!(., parsed)
+    .parsed = true
+    .vendor = "CheckPoint"
+}

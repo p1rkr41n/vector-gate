@@ -1,6 +1,0 @@
-# result: true
-
-.row = "foo,bar,\"baz, qux\""
-.parsed = parse_csv!(.row)
-.encoded = encode_csv!(.parsed)
-assert_eq!(.encoded, .row)

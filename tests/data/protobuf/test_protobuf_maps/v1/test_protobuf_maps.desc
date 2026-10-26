@@ -1,28 +1,0 @@
-
-æ
-.test_protobuf_maps/v1/test_protobuf_maps.prototest_protobuf_maps.v1"”
-Maps@
-by_bool (2'.test_protobuf_maps.v1.Maps.ByBoolEntryRbyBoolC
-by_int32 (2(.test_protobuf_maps.v1.Maps.ByInt32EntryRbyInt32C
-by_int64 (2(.test_protobuf_maps.v1.Maps.ByInt64EntryRbyInt64F
-	by_uint32 (2).test_protobuf_maps.v1.Maps.ByUint32EntryRbyUint32F
-	by_uint64 (2).test_protobuf_maps.v1.Maps.ByUint64EntryRbyUint64F
-	by_string (2).test_protobuf_maps.v1.Maps.ByStringEntryRbyString9
-ByBoolEntry
-key (Rkey
-value (	Rvalue:8:
-ByInt32Entry
-key (Rkey
-value (	Rvalue:8:
-ByInt64Entry
-key (Rkey
-value (	Rvalue:8;
-ByUint32Entry
-key (Rkey
-value (	Rvalue:8;
-ByUint64Entry
-key (Rkey
-value (	Rvalue:8;
-ByStringEntry
-key (	Rkey
-value (	Rvalue:8bproto3

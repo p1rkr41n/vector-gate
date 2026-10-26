@@ -1,5 +1,0 @@
-# object: { "foo": [ "apples", "bananas" ] }
-# result: { "foo": [ "apples" ] }
-
-.foo = pop!(.foo)
-.

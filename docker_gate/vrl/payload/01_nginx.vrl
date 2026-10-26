@@ -1,0 +1,12 @@
+#---
+# match_contains: "HTTP/1."
+# scope: payload
+# vendor: Nginx
+# priority: 1
+#---
+parsed, err = parse_apache_log(.message, "combined") ?? parse_common_log(.message)
+if err == null {
+    . = merge!(., parsed)
+    .parsed = true
+    .vendor = "Nginx"
+}

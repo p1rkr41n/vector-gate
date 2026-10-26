@@ -1,0 +1,13 @@
+[package]
+name = "raproxy"
+version = "2.4.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "=1.35.1", features = ["full"] }
+libc = "0.2"
+socket2 = { version = "0.5", features = ["all"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.34"
+indexmap = { version = "2.6", features = ["serde"] }
+

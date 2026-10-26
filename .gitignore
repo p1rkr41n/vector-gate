@@ -1,23 +1,24 @@
-cargo-timing*.html
-*.pyc
-*.iml
-*.tmp
-*~
-**/*.rs.bk
-.DS_Store
+# Build targets
+target/
+**/target/
+*.o
+*.a
+*.so
+
+# Docker & runtime logs
+docker_gate/output/
+docker_gate/bin/
+*.log
+*.ndjson
+
+# Environment & credentials
+.env
+*.token
+tele_offset.txt
+inbox_history.jsonl
+
+# IDE & OS
 .idea/
 .vscode/
-.dir-locals.el
-checkpoints/*
-miniodat
-bench_output.txt
-sample.log
-scripts/package-lock.json
-target
-node_modules
-tests/data/wasm/*/target
-heaptrack.*
-massif.*
-
-# tilt
-tilt_modules/
+*.swp
+.DS_Store

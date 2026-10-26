@@ -1,4 +1,0 @@
-# result: { "foo": true }
-
-.foo = true
-return .

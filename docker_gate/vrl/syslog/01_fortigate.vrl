@@ -1,0 +1,12 @@
+#---
+# match_contains: "devname="
+# scope: syslog
+# vendor: Fortinet
+# priority: 1
+#---
+parsed, err = parse_key_value(.message)
+if err == null {
+    . = merge!(., parsed)
+    .parsed = true
+    .vendor = "Fortinet"
+}

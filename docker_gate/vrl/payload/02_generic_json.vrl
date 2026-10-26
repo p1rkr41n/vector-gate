@@ -1,0 +1,10 @@
+#---
+# match_prefix: "{"
+# scope: payload
+# priority: 2
+#---
+parsed, err = parse_json(.message)
+if err == null {
+    . = merge!(., parsed)
+    .parsed = true
+}

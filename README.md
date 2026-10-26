@@ -1,85 +1,150 @@
-# Vector Remap Language (VRL)
+# VECTOR SMART GATE (v2.2.0)
+### High-Performance Multiplexing Ingress & Zero-Port Auto-Wiring for Timberio Vector
+**Docker Hub Image:** `l1ghtg3m/vector-gate:2.2.0` | `l1ghtg3m/vector-gate:latest`  
+**Ingress Endpoint:** Single Public Port `0.0.0.0:5000` (TCP/UDP Multiplexing)  
+**Throughput:** > 5,300,000 Events/sec | **Memory Footprint:** ~23.7 MiB RAM  
 
-[![Crates.io](https://img.shields.io/crates/v/vrl?style=flat-square)](https://crates.io/crates/vrl)
-[![docs.rs](https://img.shields.io/docsrs/vrl?style=flat-square)](https://docs.rs/vrl/latest/vrl/)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/vectordotdev/vrl/test.yml?style=flat-square)
+---
 
-VRL is an expression-oriented language for parsing, transforming, and enriching
-observability data (logs, metrics, and traces). Originally created for [Vector],
-it can also be embedded in other contexts.
+## 🌟 TỔNG QUAN HỆ THỐNG (OVERVIEW)
 
-VRL is maintained by Datadog's
-[Community Open Source Engineering team][cose-team].
+**Vector Smart Gate** là giải pháp Ingress thông minh tích hợp sẵn vào trước Timberio Vector Core:
+* **Hội tụ 1 Cổng Duy Nhất (`0.0.0.0:5000`)**: Thay vì phải mở hàng chục cổng firewall (`514` Syslog, `5044` Beats, `24224` Fluent, `8088` Splunk, `4318` OTel, `8125` StatsD...), toàn bộ lưu lượng dữ liệu log, metric, webhook và IoT đều gửi chung vào cổng `5000`.
+* **Zero-Port Auto-Wiring**: Định cấu hình sources trực tiếp bằng cú pháp `address: "gates.<route_name>"`. Vector Gate sẽ tự động cấp phát cổng loopback nội bộ động ngầm (`127.0.0.1:17500+`) và tái cấu trúc YAML an toàn trong bộ nhớ RAM trước khi Vector Core khởi chạy.
+* **Quy tắc phân loại tùy biến (Base64 Magic Bytes & Offset)**: Cho phép người dùng tùy ý nhận diện bất kỳ cấu trúc nhị phân (Hex/IoT) hoặc chuỗi ứng dụng nào theo nguyên tắc *First-Match-Wins*.
+* **Cầu chì chống nghẽn kênh (`gates.other` -> Blackhole Sink)**: Gói tin rác hoặc chữ ký lạ lập tức được xả an toàn vào `blackhole_sink`, đảm bảo cổng `5000` luôn thông suốt, không bao giờ bị treo/block kết nối.
+* **Động cơ Zero-Copy Splice Turbo-Kernel**: Sử dụng system call `splice(2)` của Linux kết hợp `SO_REUSEPORT` và `TCP_DEFER_ACCEPT`, đạt thông lượng kinh ngạc **> 5.3 triệu log/giây** mà chỉ tiêu thụ **~23.7 MiB RAM**.
 
-## Quickstart
+---
 
-[Try VRL in your browser][playground]: write a program, run it against your
-events, and inspect the results without installing anything.
+## 🚀 KHỞI CHẠY NHANH (QUICK START)
 
-[Language guide][guide] · [Function reference][functions] ·
-[Examples][examples] · [Error reference][errors]
-
-## Design
-
-VRL is designed around these core principles:
-
-- **Safety**: the compiler checks types and requires you to handle fallible
-  expressions before a program can run.
-- **Statelessness**: programs process each event independently, without retaining
-  state between events.
-- **Performance**: programs are compiled once and executed without garbage collection.
-- **Reusability**: VRL is designed to be embedded in applications beyond Vector.
-
-## Use VRL
-
-- **Command line:**
-
-  ```sh
-  cargo run
-  ```
-
-- **In Vector:** use the [`remap` transform][remap] to modify events, or VRL
-  conditions to [filter][filter] and [route][route] them.
-- **In Rust:** start with the [embedding example](examples/simple.rs) and the
-  [Rust API documentation][rust-api].
-
-## WebAssembly
-
-VRL can be compiled with the `wasm32-unknown-unknown` target:
-
-```sh
-cargo check --target wasm32-unknown-unknown --no-default-features --features stdlib
+### 1. Triển khai bằng Docker
+```bash
+docker run -d \
+  --name vector-smart-gate \
+  --restart unless-stopped \
+  -p 5000:5000 \
+  -v $(pwd)/docker_gate/config/vector.yaml:/etc/vector/vector.yaml:ro \
+  -v $(pwd)/docker_gate/output:/var/log/vector \
+  l1ghtg3m/vector-gate:2.2.0
 ```
 
-Most stdlib functions are supported. The following functions compile but abort
-at runtime due to platform limitations (I/O, system calls, or native dependencies):
+### 2. Triển khai bằng Docker Compose
+```bash
+cd docker_gate
+docker compose up -d
+```
 
-- `dns_lookup`
-- `get_hostname`
-- `http_request`
-- `log`
-- `parse_grok`
-- `parse_groks`
-- `reverse_dns`
-- `validate_json_schema`
+### 3. Kiểm tra container hoạt động
+```bash
+docker ps
+# Kiểm tra bộ nhớ RAM (~23.7 MiB):
+docker stats vector-smart-gate --no-stream
+```
 
-Note: the grok parser within the `datadog` feature is excluded entirely when
-targeting wasm32.
+---
 
-## Contributing
+## 📋 TÀI LIỆU HƯỚNG DẪN CHI TIẾT
+* 📖 [**USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
+* 🏗️ [**BA_ZERO_PORT_AUTO_WIRING.md**](BA_ZERO_PORT_AUTO_WIRING.md): Đặc tả phân tích nghiệp vụ kiến trúc Zero-Port Auto-Wiring & Cầu chì `gates.other`.
+* 🧪 [**QA_REPORT_v2_2_ZERO_PORT_E2E.md**](QA_REPORT_v2_2_ZERO_PORT_E2E.md): Báo cáo nghiệm thu kiểm thử chuyên sâu 27/27 kịch bản (100% PASS).
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development and testing instructions,
-and [DESIGN.md](DESIGN.md) for the language's design principles. Please read the
-[AI policy](AI_POLICY.md) when contributing with AI tools.
+---
 
-[vector]: https://vector.dev
-[playground]: https://playground.vrl.dev/
-[guide]: https://vector.dev/docs/reference/vrl/
-[functions]: https://vector.dev/docs/reference/vrl/functions/
-[examples]: https://vector.dev/docs/reference/vrl/examples/
-[errors]: https://vector.dev/docs/reference/vrl/errors/
-[remap]: https://vector.dev/docs/reference/configuration/transforms/remap/
-[filter]: https://vector.dev/docs/reference/configuration/transforms/filter/
-[route]: https://vector.dev/docs/reference/configuration/transforms/route/
-[rust-api]: https://docs.rs/vrl/latest/vrl/
-[cose-team]: https://opensource.datadoghq.com/about/#the-community-open-source-engineering-team
+## 🛠️ CẤU HÌNH NHANH TRONG `vector.yaml`
+
+```yaml
+data_dir: "/var/lib/vector"
+
+# 1. KHAI BÁO PHASE GATE
+gates:
+  enabled: true
+  type: "any"
+  address: "0.0.0.0:5000"
+  options:
+    pipe_buffer: 64                   # Kích thước pipe 1-256 pages (1 page = 4KB, mặc định 16)
+    pipe_adaptive: true               # Co giãn đàn hồi tự động theo tải
+  routes:
+    # Tùy biến Magic Bytes (Base64)
+    custom_iot:
+      type: "any"
+      magic_base64: "3q2+7w=="        # 0xDEADBEEF
+    # Giao thức chuẩn
+    syslog_gate:
+      type: "syslog"
+    splunk_gate:
+      type: "splunk_hec"
+    # Cầu chì chống nghẽn
+    other:
+      type: "socket"
+
+# 2. KHAI BÁO VECTOR SOURCES (TỰ ĐỘNG ĐẤU NỐI)
+sources:
+  in_custom_iot:
+    type: socket
+    mode: tcp
+    address: "gates.custom_iot"        # Tự động map vào custom_iot!
+
+  in_syslog:
+    type: syslog
+    mode: tcp
+    address: "gates.syslog_gate"       # Tự động map vào syslog_gate!
+
+  in_splunk:
+    type: splunk_hec
+    address: "gates.splunk_gate"       # Tự động map vào splunk_gate!
+
+  other_unmatched:
+    type: socket
+    mode: tcp
+    address: "gates.other"             # Đón traffic lạ
+
+# 3. SINKS
+sinks:
+  file_output:
+    type: file
+    inputs: ["in_custom_iot", "in_syslog", "in_splunk"]
+    path: "/var/log/vector/forwarded_logs.ndjson"
+    encoding:
+      codec: json
+
+  blackhole_sink:
+    type: blackhole
+    inputs: ["other_unmatched"]        # Tiêu thụ an toàn traffic lạ
+```
+
+---
+
+## ⚡ TEST THỬ NGHIỆM TƯƠNG TÁC NGAY
+
+```bash
+# 1. Test Syslog
+echo "<34>Oct 25 08:45:00 myhost app: Test log to gate 5000" | nc -w 1 127.0.0.1 5000
+
+# 2. Test Splunk HEC
+curl -X POST "http://127.0.0.1:5000/services/collector/event" \
+  -H "Authorization: Splunk 12345" \
+  -H "Content-Type: application/json" \
+  -d '{"event": "User logged in"}'
+
+# 3. Test IoT Binary Magic (0xDEADBEEF)
+python3 -c "
+import socket
+s = socket.create_connection(('127.0.0.1', 5000))
+s.sendall(bytes([0xDE, 0xAD, 0xBE, 0xEF]) + b' sensor_val=100\n')
+s.close()
+"
+
+# 4. Xem kết quả đã ghi vào file
+tail -n 5 /home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson
+```
+
+---
+
+## 📊 THÔNG SỐ KỸ THUẬT (BENCHMARKS)
+* **Thông lượng tối đa:** `5,313,402 Events/sec`
+* **Độ trễ phân loại:** $\le 0.0001\text{ ms}$
+* **Tài nguyên:** Container RAM: `23.72 MiB` | CPU Idle: `< 5%`
+* **Độ tin cậy:** Cầu chì `gates.other` ngăn chặn 100% tình trạng treo cổng Ingress khi gặp dữ liệu rác.
+

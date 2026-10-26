@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  vector-gate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: l1ghtg3m/vector-gate:2.4.3
+    container_name: vector-smart-gate
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - RUST_LOG=info
+      - VECTOR_LOG=info
+    volumes:
+      - ./config/vector.yaml:/etc/vector/vector.yaml:ro
+      - ./vrl:/etc/vector/vrl
+      - ./output:/var/log/vector
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:5000/", "-X", "POST", "-d", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+

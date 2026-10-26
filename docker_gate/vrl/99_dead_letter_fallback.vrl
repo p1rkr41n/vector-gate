@@ -1,0 +1,9 @@
+#---
+# scope: all
+# priority: 9999
+#---
+if !.parsed {
+    ._parse_status = "unmatched"
+    ._raw_signature = slice!(string!(.message), 0, 32)
+}
+
