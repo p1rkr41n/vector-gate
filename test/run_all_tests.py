@@ -52,6 +52,21 @@ SUITES = {
         "file": "test_multi_gate.py",
         "desc": "Multi-Gate Ingress, Isolated Fallback Terminals & Short Syntax",
         "requires_gate": True
+    },
+    "transparent_ip": {
+        "file": "test_transparent_ip.py",
+        "desc": "Transparent IP Kernel TPROXY & Dual-Stack IP Preservation",
+        "requires_gate": True
+    },
+    "pillar1": {
+        "file": "test_pillar1_multi_protocol.py",
+        "desc": "Pillar 1 - Universal Multi-Protocol Transport Ingress & RFC 6587",
+        "requires_gate": True
+    },
+    "pillar5": {
+        "file": "test_pillar5_elastic_buffer.py",
+        "desc": "Pillar 5 - Elastic Buffering & Universal Deduplication",
+        "requires_gate": True
     }
 }
 

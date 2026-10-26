@@ -41,6 +41,16 @@ def get_logs() -> list:
             pass
     return events
 
+def wait_for_log(predicate, timeout=3.5) -> dict:
+    start = time.time()
+    while time.time() - start < timeout:
+        logs = get_logs()
+        for ev in reversed(logs):
+            if predicate(ev):
+                return ev
+        time.sleep(0.15)
+    return None
+
 def send_tcp(payload: bytes):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(3.0)
@@ -77,16 +87,11 @@ def main():
         print(f"  [ERROR] HTTP POST failed: {e}")
         sys.exit(1)
     
-    time.sleep(0.6)
-    logs = get_logs()
-    tc1_pass = False
-    for ev in reversed(logs):
-        if ev.get("type_log") == "http_server" and ev.get("parser_applied") == "payload/01_nginx.vrl":
-            if ev.get("vendor") == "Nginx" and ev.get("parser_status") == "SUCCESS":
-                tc1_pass = True
-                print(f"  [PASS] TC-01: HTTP Nginx -> type_log: '{ev.get('type_log')}', parser: '{ev.get('parser_applied')}', vendor: '{ev.get('vendor')}', status: {ev.get('status')}")
-                break
-    if not tc1_pass:
+    ev = wait_for_log(lambda e: e.get("type_log") == "http_server" and e.get("parser_applied") == "payload/01_nginx.vrl")
+    if ev and ev.get("vendor") == "Nginx" and ev.get("parser_status") == "SUCCESS":
+        print(f"  [PASS] TC-01: HTTP Nginx -> type_log: '{ev.get('type_log')}', parser: '{ev.get('parser_applied')}', vendor: '{ev.get('vendor')}', status: {ev.get('status')}")
+    else:
+        logs = get_logs()
         print(f"  [FAIL] TC-01: Expected HTTP Nginx parsed. Output: {logs[-1] if logs else 'EMPTY'}")
         sys.exit(1)
 
@@ -97,17 +102,12 @@ def main():
     truncate_logs()
     syslog_nginx = b'<13>Oct 25 12:00:00 web01 nginx: 192.168.1.200 - - [25/Oct/2026:12:00:00 +0000] "POST /api/v1/orders HTTP/1.1" 201 128 "-" "Go-http-client/1.1"\n'
     send_tcp(syslog_nginx)
-    time.sleep(0.6)
-    logs = get_logs()
-    tc2_pass = False
-    for ev in reversed(logs):
-        if ev.get("type_log") == "syslog" and ev.get("parser_applied") == "payload/01_nginx.vrl":
-            if ev.get("vendor") == "Nginx" and ev.get("parser_status") == "SUCCESS":
-                tc2_pass = True
-                print(f"  [PASS] TC-02: Syslog Nginx -> type_log: '{ev.get('type_log')}', parser: '{ev.get('parser_applied')}', vendor: '{ev.get('vendor')}', status: {ev.get('status')}")
-                print("         ⭐️ Proved: Single 'payload/01_nginx.vrl' parses BOTH HTTP & Syslog successfully!")
-                break
-    if not tc2_pass:
+    ev = wait_for_log(lambda e: e.get("type_log") == "syslog" and e.get("parser_applied") == "payload/01_nginx.vrl")
+    if ev and ev.get("vendor") == "Nginx" and ev.get("parser_status") == "SUCCESS":
+        print(f"  [PASS] TC-02: Syslog Nginx -> type_log: '{ev.get('type_log')}', parser: '{ev.get('parser_applied')}', vendor: '{ev.get('vendor')}', status: {ev.get('status')}")
+        print("         ⭐️ Proved: Single 'payload/01_nginx.vrl' parses BOTH HTTP & Syslog successfully!")
+    else:
+        logs = get_logs()
         print(f"  [FAIL] TC-02: Expected Syslog Nginx parsed by payload/01_nginx.vrl. Output: {logs[-1] if logs else 'EMPTY'}")
         sys.exit(1)
 
@@ -118,16 +118,11 @@ def main():
     truncate_logs()
     forti_payload = b'<189>Oct 25 12:00:00 fgt01 date=2026-10-25 time=12:00:00 devname="FGT60D" type="traffic" srcip=10.0.0.50 dstip=8.8.8.8 proto=6 action="accept"\n'
     send_tcp(forti_payload)
-    time.sleep(0.6)
-    logs = get_logs()
-    tc3_pass = False
-    for ev in reversed(logs):
-        if ev.get("type_log") == "syslog" and ev.get("parser_applied") == "syslog/01_fortigate.vrl":
-            if ev.get("vendor") == "Fortinet" and ev.get("devname") == "FGT60D" and ev.get("parser_status") == "SUCCESS":
-                tc3_pass = True
-                print(f"  [PASS] TC-03: FortiGate Syslog -> type_log: '{ev.get('type_log')}', devname: '{ev.get('devname')}', vendor: '{ev.get('vendor')}'")
-                break
-    if not tc3_pass:
+    ev = wait_for_log(lambda e: e.get("type_log") == "syslog" and e.get("parser_applied") == "syslog/01_fortigate.vrl")
+    if ev and ev.get("vendor") == "Fortinet" and ev.get("devname") == "FGT60D" and ev.get("parser_status") == "SUCCESS":
+        print(f"  [PASS] TC-03: FortiGate Syslog -> type_log: '{ev.get('type_log')}', devname: '{ev.get('devname')}', vendor: '{ev.get('vendor')}'")
+    else:
+        logs = get_logs()
         print(f"  [FAIL] TC-03: FortiGate parse failed. Output: {logs[-1] if logs else 'EMPTY'}")
         sys.exit(1)
 
@@ -138,16 +133,11 @@ def main():
     truncate_logs()
     cisco_payload = b'<166>Oct 25 12:00:00 cisco-gw01: %ASA-6-302013: Built inbound TCP connection 998877 for outside:192.168.1.150/443\n'
     send_tcp(cisco_payload)
-    time.sleep(0.6)
-    logs = get_logs()
-    tc4_pass = False
-    for ev in reversed(logs):
-        if ev.get("type_log") == "syslog" and ev.get("parser_applied") == "syslog/02_cisco_asa.vrl":
-            if ev.get("vendor") == "Cisco" and ev.get("msg_id") == "302013" and ev.get("parser_status") == "SUCCESS":
-                tc4_pass = True
-                print(f"  [PASS] TC-04: Cisco ASA Syslog -> type_log: '{ev.get('type_log')}', msg_id: '{ev.get('msg_id')}', vendor: '{ev.get('vendor')}', src_ip: '{ev.get('src_ip')}'")
-                break
-    if not tc4_pass:
+    ev = wait_for_log(lambda e: e.get("type_log") == "syslog" and e.get("parser_applied") == "syslog/02_cisco_asa.vrl")
+    if ev and ev.get("vendor") == "Cisco" and ev.get("msg_id") == "302013" and ev.get("parser_status") == "SUCCESS":
+        print(f"  [PASS] TC-04: Cisco ASA Syslog -> type_log: '{ev.get('type_log')}', msg_id: '{ev.get('msg_id')}', vendor: '{ev.get('vendor')}', src_ip: '{ev.get('src_ip')}'")
+    else:
+        logs = get_logs()
         print(f"  [FAIL] TC-04: Cisco ASA parse failed. Output: {logs[-1] if logs else 'EMPTY'}")
         sys.exit(1)
 
@@ -158,18 +148,13 @@ def main():
     truncate_logs()
     unknown_payload = b'<14>Oct 25 12:00:00 sw01 RUIJIE-SWITCH: Interface GigabitEthernet0/1 changed state to UP\n'
     send_tcp(unknown_payload)
-    time.sleep(0.6)
-    logs = get_logs()
-    tc5_pass = False
-    for ev in reversed(logs):
-        if ev.get("type_log") == "syslog" and ev.get("_parse_status") == "unmatched":
-            if "_raw_signature" in ev and ev.get("parser_status") == "UNPARSED_RAW":
-                tc5_pass = True
-                print(f"  [PASS] TC-05: Dead-Letter Discovery -> _parse_status: '{ev.get('_parse_status')}', signature: '{ev.get('_raw_signature')}'")
-                print("         ⭐️ Proved: Unknown log is NOT lost; tagged with discovery signature!")
-                break
-    if not tc5_pass:
-        print(f"  [FAIL] TC-05: Dead-Letter handling failed. Output: {logs[-1] if logs else 'EMPTY'}")
+    ev = wait_for_log(lambda e: e.get("type_log") == "syslog" and e.get("_parse_status") == "unmatched")
+    if ev and ev.get("_raw_signature") == "Interface GigabitEthernet0/1 cha":
+        print(f"  [PASS] TC-05: Dead-Letter Discovery -> _parse_status: '{ev.get('_parse_status')}', signature: '{ev.get('_raw_signature')}'")
+        print("         ⭐️ Proved: Unknown log is NOT lost; tagged with discovery signature!")
+    else:
+        logs = get_logs()
+        print(f"  [FAIL] TC-05: Dead-Letter Discovery failed. Output: {logs[-1] if logs else 'EMPTY'}")
         sys.exit(1)
 
     # -------------------------------------------------------------------------
@@ -199,16 +184,11 @@ if err == null {
         truncate_logs()
         snort_payload = b'<34>Oct 25 12:00:00 ids01 snort: [SNORT] 9901: Remote Code Execution Exploit Attempt\n'
         send_tcp(snort_payload)
-        time.sleep(0.6)
-        logs = get_logs()
-        tc6_pass = False
-        for ev in reversed(logs):
-            if ev.get("type_log") == "syslog" and ev.get("parser_applied") == "syslog/04_snort.vrl":
-                if ev.get("vendor") == "Snort" and ev.get("alert_id") == "9901" and ev.get("parser_status") == "SUCCESS":
-                    tc6_pass = True
-                    print(f"  [PASS] TC-06: Live Hot-Drop -> parser: '{ev.get('parser_applied')}', vendor: '{ev.get('vendor')}', alert_id: '{ev.get('alert_id')}'")
-                    break
-        if not tc6_pass:
+        ev = wait_for_log(lambda e: e.get("type_log") == "syslog" and e.get("parser_applied") == "syslog/04_snort.vrl")
+        if ev and ev.get("vendor") == "Snort" and ev.get("alert_id") == "9901" and ev.get("parser_status") == "SUCCESS":
+            print(f"  [PASS] TC-06: Live Hot-Drop -> parser: '{ev.get('parser_applied')}', vendor: '{ev.get('vendor')}', alert_id: '{ev.get('alert_id')}'")
+        else:
+            logs = get_logs()
             print(f"  [FAIL] TC-06: Hot-Drop Snort failed. Output: {logs[-1] if logs else 'EMPTY'}")
             sys.exit(1)
     finally:

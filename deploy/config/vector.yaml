@@ -378,7 +378,7 @@ sinks:
     buffer:
       type: disk
       max_size: 10737418240 # 10GB disk buffer
-      when_full: block
+      when_full: drop_newest # Van an toàn: Loại bỏ nguy cơ Pipeline Deadlock / Freeze cổng Ingress khi đĩa đầy
 
   # Blackhole Sink cho unmatched traffic & unconsumed telemetry streams
   blackhole_sink:

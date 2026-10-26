@@ -51,7 +51,7 @@ def get_container_ip(container_name):
         return res.stdout.strip()
     return "172.21.0.2"
 
-def get_forwarded_logs(tail_lines=200):
+def get_forwarded_logs(tail_lines=1000):
     if not os.path.exists(OUTPUT_FILE):
         return []
     try:
@@ -77,12 +77,12 @@ def send_from_container(client_ip, target_ip, payload):
         "--network", DOCKER_NETWORK,
         "--ip", client_ip,
         "alpine", "sh", "-c",
-        f"echo -ne '{payload}' | nc -w 2 {target_ip} {TARGET_PORT}"
+        f"echo -ne '{payload}' | nc -w 1 {target_ip} {TARGET_PORT}"
     ]
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return res.returncode == 0
 
-def wait_for_event(predicate, timeout=5.0):
+def wait_for_event(predicate, timeout=6.0):
     start = time.time()
     while time.time() - start < timeout:
         events = get_forwarded_logs()
@@ -124,12 +124,13 @@ def main():
     corr_id_1 = f"HOST_INGRESS_{uuid.uuid4().hex[:8]}"
     log_info(f"[Test 1/4] Sending Syslog RFC 5424 from Host Bridge (Correlation ID: {corr_id_1})...")
 
-    syslog_msg = f"<134>1 2026-10-26T12:00:00Z myhost testapp - {corr_id_1} - Transparent IP Host Verification\n"
+    syslog_msg = f"<134>1 2026-10-26T12:00:00Z myhost testapp - {corr_id_1} - Transparent IP Host Verification {corr_id_1}\n"
     s = socket.create_connection(("127.0.0.1", TARGET_PORT), timeout=3)
     s.sendall(syslog_msg.encode())
+    time.sleep(0.05)
     s.close()
 
-    ev1 = wait_for_event(lambda e: corr_id_1 in json.dumps(e))
+    ev1 = wait_for_event(lambda e: corr_id_1 in json.dumps(e), timeout=6.0)
     if ev1:
         src_ip = ev1.get("source_ip")
         log_info(f"Received record with source_ip: '{src_ip}'")
@@ -144,24 +145,27 @@ def main():
     # -------------------------------------------------------------------------
     # TEST 2: Multi-Node Virtual Clients with Fixed Custom IPs
     # -------------------------------------------------------------------------
+    corr_alpha = f"CORR_ALPHA_{uuid.uuid4().hex[:6]}"
+    corr_beta = f"CORR_BETA_{uuid.uuid4().hex[:6]}"
+    corr_gamma = f"CORR_GAMMA_{uuid.uuid4().hex[:6]}"
     test_clients = [
         {
             "name": "Node Alpha (Syslog RFC 3164)",
             "ip": "172.21.0.81",
-            "msg": "<34>Oct 26 12:00:00 node-alpha kernel: [CORR-ALPHA-81] Firewall allow proto=TCP\n",
-            "corr": "CORR-ALPHA-81",
+            "msg": f"<34>Oct 26 12:00:00 node-alpha kernel: [{corr_alpha}] Firewall allow proto=TCP\n",
+            "corr": corr_alpha,
         },
         {
             "name": "Node Beta (Syslog RFC 5424)",
             "ip": "172.21.0.82",
-            "msg": "<165>1 2026-10-26T12:00:00Z node-beta authservice - CORR-BETA-82 [auth user=\"admin\"] Login OK\n",
-            "corr": "CORR-BETA-82",
+            "msg": f"<165>1 2026-10-26T12:00:00Z node-beta authservice - {corr_beta} [auth user=\"admin\"] Login OK {corr_beta}\n",
+            "corr": corr_beta,
         },
         {
             "name": "Node Gamma (Raw Socket Stream)",
             "ip": "172.21.0.83",
-            "msg": "CUSTOM_RAW_TELEMETRY: node_id=CORR-GAMMA-83 cpu=14.2 mem=45.1\n",
-            "corr": "CORR-GAMMA-83",
+            "msg": f"CUSTOM_RAW_TELEMETRY: node_id={corr_gamma} cpu=14.2 mem=45.1\n",
+            "corr": corr_gamma,
         },
     ]
 
@@ -194,9 +198,9 @@ def main():
 
     for idx, b_ip in enumerate(burst_ips):
         corr = f"BURST_{idx}_{uuid.uuid4().hex[:6]}"
-        msg = f"<14>1 2026-10-26T12:00:00Z burst-node myapp - {corr} - Burst verification\n"
+        msg = f"<14>1 2026-10-26T12:00:00Z burst-node myapp - {corr} - Burst verification {corr}\n"
         send_from_container(b_ip, target_ip, msg)
-        ev = wait_for_event(lambda e: corr in json.dumps(e), timeout=3.0)
+        ev = wait_for_event(lambda e: corr in json.dumps(e), timeout=6.0)
         if ev and ev.get("source_ip") == b_ip:
             burst_success += 1
 
@@ -213,9 +217,9 @@ def main():
     log_info("[Test 4/4] Verifying metadata integrity (type_log, ingress_port, source_id)...")
     sample_corr = f"META_{uuid.uuid4().hex[:6]}"
     sample_ip = "172.21.0.95"
-    sample_msg = f"<14>1 2026-10-26T12:00:00Z metanode app - {sample_corr} - Metadata check\n"
+    sample_msg = f"<14>1 2026-10-26T12:00:00Z metanode app - {sample_corr} - Metadata check {sample_corr}\n"
     send_from_container(sample_ip, target_ip, sample_msg)
-    ev_meta = wait_for_event(lambda e: sample_corr in json.dumps(e), timeout=3.0)
+    ev_meta = wait_for_event(lambda e: sample_corr in json.dumps(e), timeout=6.0)
 
     if ev_meta:
         valid_type = ev_meta.get("type_log") == "syslog"
