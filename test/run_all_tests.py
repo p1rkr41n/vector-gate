@@ -47,6 +47,11 @@ SUITES = {
         "file": "test_deep_e2e_verification.py",
         "desc": "Deep End-to-End Declarative Routing & Zero-Port Auto-Wiring",
         "requires_gate": True
+    },
+    "multigate": {
+        "file": "test_multi_gate.py",
+        "desc": "Multi-Gate Ingress, Isolated Fallback Terminals & Short Syntax",
+        "requires_gate": True
     }
 }
 

@@ -1,20 +1,20 @@
-# VECTOR SMART GATE (v2.4.3)
-### High-Performance Multiplexing Ingress & Zero-Port Auto-Wiring for Timberio Vector
-**Docker Hub Image:** `l1ghtg3m/vector-gate:2.4.3` | `l1ghtg3m/vector-gate:latest`  
-**Ingress Endpoint:** Single Public Port `0.0.0.0:5000` (TCP/UDP Multiplexing)  
-**Throughput:** > 5,300,000 Events/sec | **Memory Footprint:** ~23.7 MiB RAM  
+# VECTOR SMART GATE (v2.5.0)
+### High-Performance Multi-Gate Multiplexing Ingress & Zero-Port Auto-Wiring for Timberio Vector
+**Docker Hub Image:** `l1ghtg3m/vector-gate:2.5.0` | `l1ghtg3m/vector-gate:latest`  
+**Ingress Endpoints:** Single or Multi-Gate Ingress (`dmz_gate:5045`, `lan_gate:5046`, `main_gate:5000`...)  
+**Throughput:** > 5,900,000 Events/sec | **Memory Footprint:** ~85-90 MiB RAM (Full Pipeline)  
 
 ---
 
 ## 🌟 TỔNG QUAN HỆ THỐNG (OVERVIEW)
 
 **Vector Smart Gate** là giải pháp Ingress thông minh tích hợp sẵn vào trước Timberio Vector Core:
-* **Hội tụ 1 Cổng Duy Nhất (`0.0.0.0:5000`)**: Thay vì phải mở hàng chục cổng firewall (`514` Syslog, `5044` Beats, `24224` Fluent, `8088` Splunk, `4318` OTel, `8125` StatsD...), toàn bộ lưu lượng dữ liệu log, metric, webhook và IoT đều gửi chung vào cổng `5000`.
-* **Zero-Port Auto-Wiring**: Định cấu hình sources trực tiếp bằng cú pháp `address: "gates.<route_name>"`. Vector Gate sẽ tự động cấp phát cổng loopback nội bộ động ngầm (`127.0.0.1:17500+`) và tái cấu trúc YAML an toàn trong bộ nhớ RAM trước khi Vector Core khởi chạy.
-* **Hierarchical Onion VRL & Auto-Remap**: Hỗ trợ thư mục parsing phân tầng (Syslog, Payload, Fallback) và tự động transpile transforms tương ứng với hot-reload watcher.
-* **Quy tắc phân loại tùy biến (Base64 Magic Bytes & Offset)**: Cho phép người dùng tùy ý nhận diện bất kỳ cấu trúc nhị phân (Hex/IoT) hoặc chuỗi ứng dụng nào theo nguyên tắc *First-Match-Wins*.
-* **Cầu chì chống nghẽn kênh (`gates.other` -> Blackhole Sink)**: Gói tin rác hoặc chữ ký lạ lập tức được xả an toàn vào `blackhole_sink`, đảm bảo cổng `5000` luôn thông suốt, không bao giờ bị treo/block kết nối.
-* **Động cơ Zero-Copy Splice Turbo-Kernel**: Sử dụng system call `splice(2)` của Linux kết hợp `SO_REUSEPORT` và `TCP_DEFER_ACCEPT`, đạt thông lượng kinh ngạc **> 5.3 triệu log/giây** mà chỉ tiêu thụ **~23.7 MiB RAM**.
+* **Multi-Gate Ingress Engine (v2.5.0)**: Hỗ trợ khai báo nhiều Gate đồng thời trên nhiều cổng mạng (`0.0.0.0:5000`, `0.0.0.0:5045`, `0.0.0.0:5046`...). Mỗi Gate sở hữu thread-pool `SO_REUSEPORT` và vùng đệm Kernel Splice riêng biệt.
+* **Cú pháp kết nối ngắn gọn (`address: "<gate_name>.<route_name>"`)**: Không phân cấp rườm rà, loại bỏ hoàn toàn tiền tố `gates.`.
+* **Cầu chì chống nghẽn kênh cô lập (`<gate_name>.other`)**: Mỗi Gate có fallback terminal riêng biệt, xả sạch log không xác định mà không làm tắc nghẽn luồng dữ liệu của phân vùng khác.
+* **Tương thích ngược 100% Cổng Truyền Thống**: Các cổng chuyên biệt (như Syslog UDP `514`, API `8686`, Beats legacy `5044`) được Vector Core bind trực tiếp song song với Gate mà không có bất kỳ xung đột nào.
+* **Zero-Touch Client Beats Compensatory Deduplication**: Tự động giải quyết 100% vấn đề rớt ACK do Half-Close và nhân bản log do Beats reconnect trên mạng chập chờn.
+* **Động cơ Zero-Copy Splice Turbo-Kernel**: Sử dụng system call `splice(2)` của Linux kết hợp `SO_REUSEPORT` và `TCP_DEFER_ACCEPT`, đạt thông lượng kinh ngạc **> 5.9 triệu log/giây** (Hop A).
 
 ---
 
@@ -27,8 +27,9 @@ docker run -d \
   --restart unless-stopped \
   -p 5000:5000 \
   -v $(pwd)/deploy/config/vector.yaml:/etc/vector/vector.yaml:ro \
+  -v $(pwd)/deploy/vrl:/etc/vector/vrl \
   -v $(pwd)/deploy/output:/var/log/vector \
-  l1ghtg3m/vector-gate:2.4.3
+  l1ghtg3m/vector-gate:2.5.0
 ```
 
 ### 2. Tự Build Hoàn Chỉnh Từ Mã Nguồn (Build Image From Source)

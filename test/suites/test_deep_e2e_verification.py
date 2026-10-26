@@ -289,29 +289,29 @@ def main():
         record("TC-22", "CustomRule", "22. Custom Offset Magic (offset=4 'MAGIC')", False, str(e))
 
     # =========================================================================
-    # SECTION 3: ZERO-PORT AUTO-WIRING & ZERO-STUCK CHANNEL (gates.other)
+    # SECTION 3: ZERO-PORT AUTO-WIRING & ZERO-STUCK CHANNEL (main_gate.other)
     # =========================================================================
-    print(f"\n{Colors.CYAN}{Colors.BOLD}--- PHẦN 3: ZERO-PORT AUTO-WIRING & CẦU CHÌ gates.other ---{Colors.RESET}")
+    print(f"\n{Colors.CYAN}{Colors.BOLD}--- PHẦN 3: ZERO-PORT AUTO-WIRING & CẦU CHÌ main_gate.other ---{Colors.RESET}")
 
     # 23. Zero-Port Auto-Wiring Verification
     try:
         # Check container logs to verify internal dynamic ports (17500..17517)
         res = subprocess.run(["docker", "logs", "vector-smart-gate"], capture_output=True, text=True)
         has_auto_wired = "127.0.0.1:17500" in res.stdout and "127.0.0.1:17517" in res.stdout
-        record("TC-23", "AutoWiring", "23. Zero-Port Auto-Wiring (address: 'gates.<name>')", has_auto_wired, "Internal loopback ports 17500-17517 allocated dynamically")
+        record("TC-23", "AutoWiring", "23. Zero-Port Auto-Wiring (address: '<gate_name>.<route_name>')", has_auto_wired, "Internal loopback ports 17500-17517 allocated dynamically")
     except Exception as e:
-        record("TC-23", "AutoWiring", "23. Zero-Port Auto-Wiring (address: 'gates.<name>')", False, str(e))
+        record("TC-23", "AutoWiring", "23. Zero-Port Auto-Wiring (address: '<gate_name>.<route_name>')", False, str(e))
 
-    # 24. Zero-Stuck Fallback Route (gates.other -> blackhole_sink)
+    # 24. Zero-Stuck Fallback Route (main_gate.other -> blackhole_sink)
     try:
         # Send garbage packet with unknown protocol/corrupt header
         garbage = b"\xFF\xFE\xFD\xFC_CORRUPT_UNKNOWN_PAYLOAD_TESTING_ZERO_STUCK_\x00\x01\x02\n"
         s = socket.create_connection((HOST, PORT), timeout=3)
         s.sendall(garbage)
         s.close()
-        record("TC-24", "ZeroStuck", "24. Cầu chì gates.other (Blackhole Fallback)", True, "Garbage payload routed to blackhole sink, channel 5000 healthy")
+        record("TC-24", "ZeroStuck", "24. Cầu chì main_gate.other (Blackhole Fallback)", True, "Garbage payload routed to blackhole sink, channel 5000 healthy")
     except Exception as e:
-        record("TC-24", "ZeroStuck", "24. Cầu chì gates.other (Blackhole Fallback)", False, str(e))
+        record("TC-24", "ZeroStuck", "24. Cầu chì main_gate.other (Blackhole Fallback)", False, str(e))
 
     # =========================================================================
     # SECTION 4: HIỆU NĂNG THÔNG LƯỢNG & TÀI NGUYÊN

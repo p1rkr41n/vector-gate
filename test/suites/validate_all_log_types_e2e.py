@@ -57,9 +57,9 @@ def run_test(name: str, send_fn, expected_type_log: str, expected_source_id: str
     
     # Wait up to 3 seconds for vector to write to output
     matched = None
-    for _ in range(15):
-        time.sleep(0.2)
-        recent = get_last_n_lines(10)
+    for _ in range(20):
+        time.sleep(0.15)
+        recent = get_last_n_lines(50)
         for l in reversed(recent):
             try:
                 obj = json.loads(l)

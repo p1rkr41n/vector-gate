@@ -306,17 +306,16 @@ sinks:
     cfg_gate_active = f"""
 data_dir: "{WORKDIR}/dg"
 gates:
-  enabled: true
-  type: "any"
-  address: "127.0.0.1:{port_gate}"
-  routes:
-    other:
-      type: "socket"
+  main_gate:
+    address: "127.0.0.1:{port_gate}"
+    routes:
+      other:
+        type: "socket"
 sources:
   other_unmatched:
     type: socket
     mode: tcp
-    address: "gates.other"
+    address: "main_gate.other"
 transforms:
   std_remap:
     type: remap
@@ -341,7 +340,8 @@ sinks:
     cfg_gate_disabled = f"""
 data_dir: "{WORKDIR}/db"
 gates:
-  enabled: false
+  main_gate:
+    enabled: false
 sources:
   in_raw:
     type: socket

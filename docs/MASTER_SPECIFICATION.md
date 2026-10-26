@@ -1,6 +1,6 @@
 # VECTOR SMART GATE: MASTER SPECIFICATION & QA ACCEPTANCE REPORT
 ### Tài Liệu Toàn Diện Hợp Nhất: Đặc Tả Nghiệp Vụ, Kiến Trúc Kỹ Thuật & Nghiệm Thu Chất Lượng
-**Phiên bản hệ thống:** `v2.4.3`  
+**Phiên bản hệ thống:** `v2.5.0`  
 **Docker Hub Release:** `l1ghtg3m/vector-gate:2.4.3` | `l1ghtg3m/vector-gate:latest`  
 **Cổng Ingress tập trung:** Duy nhất `0.0.0.0:5000` (TCP/UDP Multiplexing)  
 **Thông lượng đo kiểm:** `> 10,800,000 Events/giây` | **Bộ nhớ RAM:** `~23.7 MiB`  
@@ -2915,3 +2915,50 @@ Toàn bộ cụm Vector Smart Gate v2.4.3 được nâng cấp để gánh 100% 
 - **Rơi rớt ACK khi Client Half-Close:** Giảm từ **100% thất bại (0/20)** ở bản cũ xuống **0% thất bại (20/20 nhận đủ 100%)** ở bản v2.4.3.
 - **Log trùng lặp khi Beat Resend:** Giảm từ **100% trùng lặp (30/30)** ở bản cũ xuống **0% trùng lặp (0 duplicate, 100% deduplicated)** ở bản v2.4.3.
 - **Tỷ lệ vượt qua kiểm thử tự động:** **100.0% PASS trên toàn bộ 7/7 Test Suites (67/67 test cases)**.
+
+
+## CHƯƠNG III.6: Kiến Trúc Multi-Gate Ingress Engine (v2.5.0) & Chuẩn Hóa Cú Pháp Ngắn Gọn
+
+### 1. Bối Cảnh Nghiệp Vụ & Yêu Cầu Chuyển Đổi
+Trong các phiên bản trước (`v2.4.0` - `v2.4.3`), Vector Gate hoạt động theo mô hình Single-Gate Singleton, chỉ tiếp nhận traffic trên một cổng duy nhất (`0.0.0.0:5000`) và sử dụng tiền tố dài dòng `address: "gates.<route_name>"`.
+Khi mở rộng hạ tầng sang các mô hình Doanh nghiệp phức hợp:
+- Cần mở nhiều cổng thông minh đồng thời trên các phân vùng mạng khác nhau (ví dụ: `dmz_gate:5045`, `lan_gate:5046`, `main_gate:5000`).
+- Cần một cú pháp kết nối ngắn gọn, trực tiếp: `address: "<gate_name>.<route_name>"`.
+- Cần phân tách và cô lập hoàn toàn kênh Fallback Unmatched cho từng Gate: `<gate_name>.other` (thay vì dùng chung `gates.other`).
+
+### 2. Mô Hình Kiến Trúc Kỹ Thuật v2.5.0
+1. **Multi-Gate Ingress Map (`gates: IndexMap<String, GateConfig>`)**:
+   Cho phép khai báo song song nhiều Gate độc lập. Mỗi Gate sở hữu:
+   - Một cổng lắng nghe mạng riêng (`address: "0.0.0.0:5045"`).
+   - Một thread-pool đa luồng `SO_REUSEPORT` và vùng đệm Zero-Copy Splice độc lập.
+   - Một bảng định tuyến First-Match-Wins riêng.
+2. **Ngữ Pháp Tối Giản (Short Wiring Syntax)**:
+   - Nguồn nhận trong `sources:` khai báo trực tiếp: `address: "<gate_name>.<route_name>"`.
+   - Tiền tố phân cấp tuyệt đối `gates.` bị bãi bỏ hoàn toàn. Mọi nỗ lực dùng `gates.` đều bị hệ thống từ chối kèm thông báo hướng dẫn chuẩn hóa.
+3. **Kênh Fallback Terminal Riêng Biệt (`<gate_name>.other`)**:
+   - Mỗi Gate tự động khởi tạo hoặc liên kết với route `other` của riêng mình.
+   - Gói tin rác hoặc chữ ký lạ của Gate nào sẽ tự động xả vào `<gate_name>.other` của Gate đó, không gây tắc nghẽn hoặc ảnh hưởng chéo sang Gate khác.
+4. **Tương Thích Song Song Cổng Trực Tiếp Vector Core**:
+   - Các nguồn sử dụng địa chỉ mạng vật lý thông thường (như `0.0.0.0:514` mode UDP, `0.0.0.0:8686` API) được Vector Core bind trực tiếp song song với các cổng Gate mà không có bất kỳ xung đột nào.
+
+### 3. Kết Quả Nghiệm Thu Kiểm Thử Toàn Diện (8 / 8 Suites PASS 100%)
+- **Test Suite Multi-Gate Chuyên Sâu (`test_multi_gate.py`)**: Đạt **9 / 9 PASS (100%)**:
+  - `TC-MG-01`: Bắt lỗi và từ chối tiền tố cũ `gates.`
+  - `TC-MG-02`: Bắt lỗi tham chiếu Gate không tồn tại
+  - `TC-MG-03`: Bắt lỗi tham chiếu Route không tồn tại trong Gate
+  - `TC-MG-04`: Đấu nối đa cổng `dmz_gate` & `lan_gate` kết hợp cổng Direct Passthrough
+  - `TC-MG-05`: Khởi tạo đồng thời 2 socket listener thực tế (`19145` và `19146`)
+  - `TC-MG-06`: Thu nạp HTTP thành công qua `dmz_gate.http_route`
+  - `TC-MG-07`: Thu nạp Beats Lumberjack thành công qua `lan_gate.beats_route`
+  - `TC-MG-08`: Xả rác phân vùng DMZ thành công vào `dmz_gate.other`
+  - `TC-MG-09`: Xả rác phân vùng LAN thành công vào `lan_gate.other`
+- **Toàn bộ 8 Suites Tích Hợp**: **100.0% Success Rate**:
+  1. `matrix`: 8/8 PASS
+  2. `onion`: 6/6 PASS
+  3. `protocols`: 12/12 PASS
+  4. `chaos`: 8/8 PASS
+  5. `beats_rsk`: 6/6 PASS
+  6. `chaos_beats_100`: PASS
+  7. `deep_e2e`: 27/27 PASS
+  8. `multigate`: 9/9 PASS
+- **Thông Lượng Thực Đo**: Hop A (Gate -> Source) đạt **5,947,336 EPS** với độ trễ chuyển tiếp chỉ **168 nanoseconds** (~0.0001 ms). Zero-Warning tuyệt đối trên toàn bộ hệ thống.

@@ -403,6 +403,7 @@ async fn handle_connection(
 }
 
 pub fn start_gate_engine(
+    gate_name: &str,
     config: Arc<RuntimeConfig>,
     stats: Arc<Stats>,
     shutdown_rx: tokio::sync::watch::Receiver<bool>,
@@ -413,6 +414,7 @@ pub fn start_gate_engine(
 
     let stats_reporter = Arc::clone(&stats);
     let mut stats_rx = shutdown_rx.clone();
+    let g_name_stats = gate_name.to_string();
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -420,7 +422,8 @@ pub fn start_gate_engine(
                     let total = stats_reporter.total_connections.load(Ordering::Relaxed);
                     if total > 0 {
                         println!(
-                            "📊 [Vector Gate Stats] Total: {} | Custom: {} | Syslog: {} | Beats: {} | Fluent: {} | Splunk: {} | Datadog: {} | Firehose: {} | Heroku: {} | PromRW: {} | PromPG: {} | OTel: {} | VectorNative: {} | StatsD: {} | dnstap: {} | HTTP: {} | Raw: {}",
+                            "📊 [Vector Gate Stats - {}] Total: {} | Custom: {} | Syslog: {} | Beats: {} | Fluent: {} | Splunk: {} | Datadog: {} | Firehose: {} | Heroku: {} | PromRW: {} | PromPG: {} | OTel: {} | VectorNative: {} | StatsD: {} | dnstap: {} | HTTP: {} | Raw: {}",
+                            g_name_stats,
                             total,
                             stats_reporter.custom_conns.load(Ordering::Relaxed),
                             stats_reporter.syslog_conns.load(Ordering::Relaxed),
@@ -455,12 +458,13 @@ pub fn start_gate_engine(
         let st = Arc::clone(&stats);
         let bind_addr = config.bind;
         let mut rx = shutdown_rx.clone();
+        let g_name_worker = gate_name.to_string();
 
         tokio::spawn(async move {
             let listener = match create_reuseport_listener(bind_addr, &cfg) {
                 Ok(l) => l,
                 Err(e) => {
-                    eprintln!("[Worker {}] Error creating SO_REUSEPORT listener: {}", worker_id, e);
+                    eprintln!("[Worker {} - {}] Error creating SO_REUSEPORT listener: {}", worker_id, g_name_worker, e);
                     return;
                 }
             };
@@ -639,31 +643,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let gate_enabled = unified_cfg.gate.as_ref().map(|g| g.enabled).unwrap_or(false);
+        let any_gate_enabled = unified_cfg.gates.values().any(|g| g.enabled);
 
         // Validation only mode
         if validate_only {
             println!("🔍 Validating unified configuration: {}", path.display());
-            if let Some(ref gate) = unified_cfg.gate {
-                if gate.enabled {
-                    println!("✅ Gate Phase 0: Enabled (type: '{}', address: {})", gate.gate_type, gate.address);
-                    let routes = gate.compile_routes()?;
-                    println!("📋 Active Routes: {} configured", routes.len());
-                    for (idx, r) in routes.iter().enumerate() {
-                        match &r.condition {
-                            RouteCondition::MagicBytes { bytes, offset } => {
-                                println!("  [{}] '{}' (Magic: {:02X?}, Offset: {}) -> {}", idx + 1, r.name, bytes, offset, r.target);
-                            }
-                            RouteCondition::Predefined(p) => {
-                                println!("  [{}] '{}' (Predefined: {:?}) -> {}", idx + 1, r.name, p, r.target);
+            if any_gate_enabled {
+                println!("✅ Gate Phase 0: Multi-Gate Engine (v2.5.0)");
+                for (gate_name, gate) in &unified_cfg.gates {
+                    if gate.enabled {
+                        println!("  - Gate '{}' (type: '{}', address: {})", gate_name, gate.gate_type, gate.address);
+                        let routes = gate.compile_routes()?;
+                        println!("    Active Routes: {} configured", routes.len());
+                        for (idx, r) in routes.iter().enumerate() {
+                            match &r.condition {
+                                RouteCondition::MagicBytes { bytes, offset } => {
+                                    println!("      [{}] '{}.{}' (Magic: {:02X?}, Offset: {}) -> {}", idx + 1, gate_name, r.name, bytes, offset, r.target);
+                                }
+                                RouteCondition::Predefined(p) => {
+                                    println!("      [{}] '{}.{}' (Predefined: {:?}) -> {}", idx + 1, gate_name, r.name, p, r.target);
+                                }
                             }
                         }
+                    } else {
+                        println!("  - Gate '{}': Disabled (Bypass mode)", gate_name);
                     }
-                } else {
-                    println!("ℹ️ Gate Phase 0: Disabled (Bypass mode)");
                 }
             } else {
-                println!("ℹ️ Gate Phase 0: Not defined (Bypass mode)");
+                println!("ℹ️ Gate Phase 0: All gates disabled or not defined (Bypass mode)");
             }
 
             if !unified_cfg.auto_remap_targets.is_empty() {
@@ -706,47 +713,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut vector_config_path = path.to_path_buf();
         let mut tmp_file_to_clean: Option<PathBuf> = None;
 
-        if gate_enabled {
-            let gate = unified_cfg.gate.as_ref().unwrap();
-            let runtime_cfg = Arc::new(RuntimeConfig::from_gate_config(gate));
-            let stats = Arc::new(Stats::default());
-
+        if any_gate_enabled {
             println!("============================================================");
-            println!("🚪 [Vector Gate Phase 0: ACTIVE - UNIFIED DECLARATIVE ENGINE]");
-            println!("👉 Single Ingress Endpoint   : {}", runtime_cfg.bind);
-            println!("🚀 Zero-Copy Splice Engine   : Enabled (Linux Kernel pipe2)");
-            println!("⚡ Multi-Queue SO_REUSEPORT  : Enabled");
-            println!("⏱️ Low-Latency Wakeup       : TCP_DEFER_ACCEPT & TCP_NODELAY");
-            println!("🔗 Unified Declarative Routes (First-Match-Wins):");
-            for (idx, r) in runtime_cfg.routes.iter().enumerate() {
-                match &r.condition {
-                    RouteCondition::MagicBytes { bytes, offset } => {
-                        println!(
-                            "  [{:02}] '{}' (Base64 Magic: {:02X?}, Offset: {}) -> {}",
-                            idx + 1, r.name, bytes, offset, r.target
-                        );
-                    }
-                    RouteCondition::Predefined(p) => {
-                        println!(
-                            "  [{:02}] '{}' (Predefined: {:?}) -> {}",
-                            idx + 1, r.name, p, r.target
-                        );
+            println!("🚪 [Vector Gate Phase 0: ACTIVE - MULTI-GATE ENGINE (v2.5.0)]");
+            for (gate_name, gate) in &unified_cfg.gates {
+                if !gate.enabled {
+                    println!("ℹ️ Gate '{}': Disabled (Bypass mode)", gate_name);
+                    continue;
+                }
+                let runtime_cfg = Arc::new(RuntimeConfig::from_gate_config(gate));
+                let stats = Arc::new(Stats::default());
+
+                println!("👉 Gate '{}' Ingress Endpoint: {}", gate_name, runtime_cfg.bind);
+                println!("   Zero-Copy Splice Engine   : Enabled (Linux Kernel pipe2)");
+                println!("   Multi-Queue SO_REUSEPORT  : Enabled");
+                println!("   Active Routes:");
+                for (idx, r) in runtime_cfg.routes.iter().enumerate() {
+                    match &r.condition {
+                        RouteCondition::MagicBytes { bytes, offset } => {
+                            println!(
+                                "     [{:02}] '{}.{}' (Base64 Magic: {:02X?}, Offset: {}) -> {}",
+                                idx + 1, gate_name, r.name, bytes, offset, r.target
+                            );
+                        }
+                        RouteCondition::Predefined(p) => {
+                            println!(
+                                "     [{:02}] '{}.{}' (Predefined: {:?}) -> {}",
+                                idx + 1, gate_name, r.name, p, r.target
+                            );
+                        }
                     }
                 }
+                start_gate_engine(gate_name, runtime_cfg, stats, shutdown_rx.clone());
             }
             println!("============================================================");
-
-            start_gate_engine(runtime_cfg, stats, shutdown_rx.clone());
         } else {
             println!("============================================================");
             println!("🚪 [Vector Gate Phase 0: BYPASS]");
-            println!("ℹ️ Gate Phase 0 is disabled. Vector Core handles all traffic directly.");
+            println!("ℹ️ All gates are disabled or none defined. Vector Core handles all traffic directly.");
             println!("============================================================");
         }
 
         // ALWAYS sanitize runtime YAML if 'gates:' block is present or 'auto_remap' was used,
         // ensuring Vector Core never encounters unknown fields even in Bypass Mode!
-        let needs_sanitization = unified_cfg.gate.is_some() || !unified_cfg.auto_remap_targets.is_empty();
+        let needs_sanitization = !unified_cfg.gates.is_empty() || !unified_cfg.auto_remap_targets.is_empty();
         if needs_sanitization {
             let sanitized = unified_cfg.sanitized_vector_yaml()?;
             let tmp_path = PathBuf::from(format!("/tmp/.vector_runtime_{}.yaml", std::process::id()));
@@ -759,7 +769,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Spawn VRL Watcher if auto_remap directories or vrl_dir is enabled
         let mut _watcher_handle = None;
-        let vrl_watch_enabled = unified_cfg.gate.as_ref().map(|g| g.options.vrl_watch).unwrap_or(true);
+        let vrl_watch_enabled = unified_cfg.gates.values().any(|g| g.options.vrl_watch);
         let vrl_dirs = unified_cfg.get_vrl_directories();
 
         if vrl_watch_enabled && !vrl_dirs.is_empty() {
@@ -894,7 +904,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let stats = Arc::new(Stats::default());
     let cfg = Arc::new(standalone_cfg);
-    start_gate_engine(cfg, stats, shutdown_rx);
+    start_gate_engine("standalone", cfg, stats, shutdown_rx);
 
     tokio::select! {
         _ = sigterm.recv() => {

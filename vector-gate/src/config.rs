@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnifiedVectorConfig {
-    #[serde(default, alias = "gates")]
-    pub gate: Option<GateConfig>,
+    #[serde(default, rename = "gate", alias = "gates", deserialize_with = "deserialize_gates")]
+    pub gates: IndexMap<String, GateConfig>,
 
     #[serde(skip)]
     pub auto_remap_targets: IndexMap<String, PathBuf>,
@@ -16,9 +16,31 @@ pub struct UnifiedVectorConfig {
     pub vector_topology: serde_yaml::Value,
 }
 
+fn deserialize_gates<'de, D>(deserializer: D) -> Result<IndexMap<String, GateConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum GatesInput {
+        Multi(IndexMap<String, GateConfig>),
+        Single(GateConfig),
+    }
+
+    match Option::<GatesInput>::deserialize(deserializer)? {
+        None => Ok(IndexMap::new()),
+        Some(GatesInput::Multi(map)) => Ok(map),
+        Some(GatesInput::Single(gate)) => {
+            let mut map = IndexMap::new();
+            map.insert("main_gate".to_string(), gate);
+            Ok(map)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GateConfig {
-    #[serde(default = "default_false")]
+    #[serde(default = "default_true")]
     pub enabled: bool,
 
     #[serde(rename = "type", default = "default_gate_type")]
@@ -42,6 +64,7 @@ pub struct GateConfig {
     pub custom_rules: Vec<CustomRuleConfig>,
 }
 
+#[allow(dead_code)]
 fn default_false() -> bool {
     false
 }
@@ -810,28 +833,32 @@ fn generate_decision_tree_vrl(plugins: &[VrlPlugin]) -> String {
 }
 
 impl UnifiedVectorConfig {
-    /// Auto-wires `address: "gates.<route_name>"` in `sources:` to Gate routes, allocates internal ports,
-    /// and ensures `gates.other` terminal fallback route always exists.
+    /// Auto-wires `address: "<gate_name>.<route_name>"` in `sources:` to Gate routes, allocates internal ports,
+    /// and ensures `<gate_name>.other` terminal fallback route always exists.
     pub fn auto_wire_routes(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(ref mut gate) = self.gate {
+        if self.gates.is_empty() {
+            return Ok(());
+        }
+
+        let mut next_port = 17500u16;
+
+        let allocate_free_internal_port = |port: &mut u16| -> SocketAddr {
+            loop {
+                let candidate = *port;
+                *port = port.saturating_add(1);
+                if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", candidate)) {
+                    drop(listener);
+                    return SocketAddr::from(([127, 0, 0, 1], candidate));
+                }
+            }
+        };
+
+        // 1. For each gate, ensure `other` route exists as its fallback terminal
+        for (_gate_name, gate) in self.gates.iter_mut() {
             if !gate.enabled {
-                return Ok(());
+                continue;
             }
 
-            let mut next_port = gate.options.internal_port_base.unwrap_or(17500u16);
-
-            let allocate_free_internal_port = |port: &mut u16| -> SocketAddr {
-                loop {
-                    let candidate = *port;
-                    *port = port.saturating_add(1);
-                    if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", candidate)) {
-                        drop(listener);
-                        return SocketAddr::from(([127, 0, 0, 1], candidate));
-                    }
-                }
-            };
-
-            // 1. Ensure `other` route exists as the default fallback terminal
             match gate.routes {
                 Some(RoutesConfig::Map(ref mut map)) => {
                     if !map.contains_key("other") {
@@ -872,95 +899,131 @@ impl UnifiedVectorConfig {
                     gate.routes = Some(RoutesConfig::Map(map));
                 }
             }
+        }
 
-            // 2. Scan and wire `sources:`
-            if let Some(sources) = self.vector_topology.get_mut("sources").and_then(|s| s.as_mapping_mut()) {
-                for (source_id, source_val) in sources.iter_mut() {
-                    let s_name = source_id.as_str().unwrap_or("unknown_source").to_string();
+        // 2. Scan and wire `sources:`
+        if let Some(sources) = self.vector_topology.get_mut("sources").and_then(|s| s.as_mapping_mut()) {
+            for (source_id, source_val) in sources.iter_mut() {
+                let s_name = source_id.as_str().unwrap_or("unknown_source").to_string();
 
-                    // Wire closure for a specific address field in YAML
-                    let mut do_wire = |addr_val: &mut serde_yaml::Value, label: &str| -> Result<(), Box<dyn std::error::Error>> {
-                        if let Some(addr_str) = addr_val.as_str() {
-                            let clean = addr_str.trim();
-                            let target_name = if clean == "gates" || clean == "gate" {
-                                "other"
-                            } else if let Some(stripped) = clean.strip_prefix("gates.") {
-                                stripped.trim()
-                            } else if let Some(stripped) = clean.strip_prefix("gate.") {
-                                stripped.trim()
+                // Wire closure for a specific address field in YAML
+                let mut do_wire = |addr_val: &mut serde_yaml::Value, label: &str| -> Result<(), Box<dyn std::error::Error>> {
+                    if let Some(addr_str) = addr_val.as_str() {
+                        let clean = addr_str.trim();
+
+                        // Normal socket address with port colon (e.g. "0.0.0.0:514", "127.0.0.1:5044", "[::]:8080")
+                        if clean.contains(':') {
+                            return Ok(());
+                        }
+
+                        // Rejection of deprecated absolute syntax (e.g. "gates.dmz_gate.nginx_route" or "gates.other")
+                        if clean.starts_with("gates.") || clean.starts_with("gate.") {
+                            return Err(format!(
+                                "Source '{}' uses deprecated absolute namespace '{}'. Please use the concise format '<gate_name>.<route_name>' (e.g. '<gate_name>.other' or '<gate_name>.<route>') without 'gates.' prefix.",
+                                label, clean
+                            ).into());
+                        }
+
+                        // Must match "<gate_name>.<route_name>"
+                        if let Some((gate_name, route_name)) = clean.split_once('.') {
+                            let gate_name = gate_name.trim();
+                            let route_name = route_name.trim();
+
+                            if let Some(gate) = self.gates.get_mut(gate_name) {
+                                if !gate.enabled {
+                                    return Err(format!(
+                                        "Source '{}' references gate '{}', but this gate is disabled (enabled: false)",
+                                        label, gate_name
+                                    ).into());
+                                }
+
+                                let mut allocated_addr_opt: Option<SocketAddr> = None;
+
+                                if let Some(RoutesConfig::Map(ref mut map)) = gate.routes {
+                                    if let Some(route_item) = map.get_mut(route_name) {
+                                        let addr = match route_item.target {
+                                            Some(existing) => existing,
+                                            None => {
+                                                let new_addr = allocate_free_internal_port(&mut next_port);
+                                                route_item.target = Some(new_addr);
+                                                new_addr
+                                            }
+                                        };
+                                        allocated_addr_opt = Some(addr);
+                                    } else {
+                                        let available: Vec<String> = map.keys().cloned().collect();
+                                        return Err(format!(
+                                            "Source '{}' references undefined route '{}' in gate '{}'. Available routes in '{}': {:?}",
+                                            label, route_name, gate_name, gate_name, available
+                                        ).into());
+                                    }
+                                } else if let Some(RoutesConfig::List(ref mut list)) = gate.routes {
+                                    if let Some(route_item) = list.iter_mut().find(|r| r.name.as_deref() == Some(route_name)) {
+                                        let addr = match route_item.target {
+                                            Some(existing) => existing,
+                                            None => {
+                                                let new_addr = allocate_free_internal_port(&mut next_port);
+                                                route_item.target = Some(new_addr);
+                                                new_addr
+                                            }
+                                        };
+                                        allocated_addr_opt = Some(addr);
+                                    } else {
+                                        let available: Vec<String> = list.iter().filter_map(|r| r.name.clone()).collect();
+                                        return Err(format!(
+                                            "Source '{}' references undefined route '{}' in gate '{}'. Available routes in '{}': {:?}",
+                                            label, route_name, gate_name, gate_name, available
+                                        ).into());
+                                    }
+                                }
+
+                                if let Some(allocated) = allocated_addr_opt {
+                                    *addr_val = serde_yaml::Value::String(allocated.to_string());
+                                }
                             } else {
-                                return Ok(()); // Normal address, e.g. "127.0.0.1:15514"
-                            };
-
-                            let mut allocated_addr_opt: Option<SocketAddr> = None;
-
-                            if let Some(RoutesConfig::Map(ref mut map)) = gate.routes {
-                                if let Some(route_item) = map.get_mut(target_name) {
-                                    let addr = match route_item.target {
-                                        Some(existing) => existing,
-                                        None => {
-                                            let new_addr = allocate_free_internal_port(&mut next_port);
-                                            route_item.target = Some(new_addr);
-                                            new_addr
-                                        }
-                                    };
-                                    allocated_addr_opt = Some(addr);
-                                } else {
-                                    let available: Vec<String> = map.keys().cloned().collect();
-                                    return Err(format!(
-                                        "Source '{}' references undefined gate route '{}'. Available routes: {:?}",
-                                        label, clean, available
-                                    ).into());
-                                }
-                            } else if let Some(RoutesConfig::List(ref mut list)) = gate.routes {
-                                if let Some(route_item) = list.iter_mut().find(|r| r.name.as_deref() == Some(target_name)) {
-                                    let addr = match route_item.target {
-                                        Some(existing) => existing,
-                                        None => {
-                                            let new_addr = allocate_free_internal_port(&mut next_port);
-                                            route_item.target = Some(new_addr);
-                                            new_addr
-                                        }
-                                    };
-                                    allocated_addr_opt = Some(addr);
-                                } else {
-                                    let available: Vec<String> = list.iter().filter_map(|r| r.name.clone()).collect();
-                                    return Err(format!(
-                                        "Source '{}' references undefined gate route '{}'. Available routes: {:?}",
-                                        label, clean, available
-                                    ).into());
-                                }
+                                let available_gates: Vec<String> = self.gates.keys().cloned().collect();
+                                return Err(format!(
+                                    "Source '{}' references unknown gate '{}' in '{}'. Available gates: {:?}",
+                                    label, gate_name, clean, available_gates
+                                ).into());
                             }
-
-                            if let Some(allocated) = allocated_addr_opt {
-                                *addr_val = serde_yaml::Value::String(allocated.to_string());
-                            }
-                        }
-                        Ok(())
-                    };
-
-                    // Top-level address
-                    if let Some(addr_val) = source_val.get_mut("address") {
-                        do_wire(addr_val, &s_name)?;
-                    }
-
-                    // Nested opentelemetry http block
-                    if let Some(http_block) = source_val.get_mut("http") {
-                        if let Some(addr_val) = http_block.get_mut("address") {
-                            do_wire(addr_val, &format!("{}.http", s_name))?;
+                        } else {
+                            // Does not contain ':' and does not contain '.'
+                            return Err(format!(
+                                "Source '{}' has invalid address '{}'. Expected format '<gate_name>.<route_name>' or standard IP:Port (e.g. '0.0.0.0:514')",
+                                label, clean
+                            ).into());
                         }
                     }
+                    Ok(())
+                };
 
-                    // Nested opentelemetry grpc block
-                    if let Some(grpc_block) = source_val.get_mut("grpc") {
-                        if let Some(addr_val) = grpc_block.get_mut("address") {
-                            do_wire(addr_val, &format!("{}.grpc", s_name))?;
-                        }
+                // Top-level address
+                if let Some(addr_val) = source_val.get_mut("address") {
+                    do_wire(addr_val, &s_name)?;
+                }
+
+                // Nested opentelemetry http block
+                if let Some(http_block) = source_val.get_mut("http") {
+                    if let Some(addr_val) = http_block.get_mut("address") {
+                        do_wire(addr_val, &format!("{}.http", s_name))?;
+                    }
+                }
+
+                // Nested opentelemetry grpc block
+                if let Some(grpc_block) = source_val.get_mut("grpc") {
+                    if let Some(addr_val) = grpc_block.get_mut("address") {
+                        do_wire(addr_val, &format!("{}.grpc", s_name))?;
                     }
                 }
             }
+        }
 
-            // 3. Default any remaining None targets
+        // 3. Default any remaining None targets
+        for (gate_name, gate) in self.gates.iter_mut() {
+            if !gate.enabled {
+                continue;
+            }
             if let Some(RoutesConfig::Map(ref mut map)) = gate.routes {
                 for (name, item) in map.iter_mut() {
                     if item.target.is_none() {
@@ -969,8 +1032,8 @@ impl UnifiedVectorConfig {
                             item.target = Some(discard);
                         } else {
                             return Err(format!(
-                                "Gate route '{}' has no target and no source in 'sources:' references it with 'address: gates.{}'",
-                                name, name
+                                "Gate '{}' route '{}' has no target and no source in 'sources:' references it with 'address: {}.{}'",
+                                gate_name, name, gate_name, name
                             ).into());
                         }
                     }
@@ -984,14 +1047,15 @@ impl UnifiedVectorConfig {
                         } else {
                             let n = item.name.as_deref().unwrap_or("unnamed");
                             return Err(format!(
-                                "Gate route '{}' has no target and no source references it with 'address: gates.{}'",
-                                n, n
+                                "Gate '{}' route '{}' has no target and no source references it with 'address: {}.{}'",
+                                gate_name, n, gate_name, n
                             ).into());
                         }
                     }
                 }
             }
         }
+
         Ok(())
     }
 
@@ -1086,7 +1150,7 @@ impl UnifiedVectorConfig {
                 dirs.push(dir.clone());
             }
         }
-        if let Some(ref gate) = self.gate {
+        for gate in self.gates.values() {
             if let Some(ref legacy_dir) = gate.options.vrl_dir {
                 if !dirs.contains(legacy_dir) {
                     dirs.push(legacy_dir.clone());
@@ -1127,8 +1191,8 @@ impl UnifiedVectorConfig {
                 }
             }
         } else {
-            // Backward-compatibility: Check if gate.options.vrl_dir is defined
-            let vrl_dir_opt = self.gate.as_ref().and_then(|g| g.options.vrl_dir.clone());
+            // Backward-compatibility: Check if any gate has options.vrl_dir defined
+            let vrl_dir_opt = self.gates.values().find_map(|g| g.options.vrl_dir.clone());
             if let Some(vrl_dir) = vrl_dir_opt {
                 let mut plugins = Vec::new();
                 if vrl_dir.exists() && vrl_dir.is_dir() {
@@ -1160,9 +1224,9 @@ impl UnifiedVectorConfig {
         config.auto_wire_routes()?;
         config.discover_auto_remap_transforms(config_dir)?;
         config.synthesize_vrl_transforms()?;
-        if let Some(ref gate) = config.gate {
+        for (gate_name, gate) in &config.gates {
             if let Err(err) = gate.validate() {
-                return Err(err.into());
+                return Err(format!("Gate '{}': {}", gate_name, err).into());
             }
         }
         Ok(config)
