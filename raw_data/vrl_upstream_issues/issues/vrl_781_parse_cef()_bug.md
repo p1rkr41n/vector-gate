@@ -1,0 +1,25 @@
+# [#781] parse_cef() bug
+
+- **Repository**: [vectordotdev/vrl](https://github.com/vectordotdev/vrl/issues/781)
+- **Status**: `OPEN`
+- **Author**: [@manickamk](https://github.com/manickamk)
+- **Created At**: `2024-04-02T07:20:51Z`
+- **Updated At**: `2026-06-01T14:07:36Z`
+- **Comments**: 10
+- **Labels**: `vrl:stdlib`, `stdlib:parse_cef`
+- **GitHub Link**: [View on GitHub](https://github.com/vectordotdev/vrl/issues/781)
+
+---
+
+## Description
+
+Hello team,
+
+We have identified the bug on parse_cef() function below is the sample log if we remove the space the function is working properly 
+![image](https://github.com/vectordotdev/vrl/assets/20439001/ae006372-4a63-4530-bac5-1da1b44703cc)
+
+Please look the below url VRL playground 
+
+https://playground.vrl.dev/?state=eyJwcm9ncmFtIjoiLiA9IHBhcnNlX2NlZiEoLm1lc3NhZ2UpIiwiZXZlbnQiOnsibWVzc2FnZSI6IkNFRjowfEluY2Fwc3VsYXxTSUVNaW50ZWdyYXRpb258MXwxfElsbGVnYWwgUmVzb3VyY2UgQWNjZXNzfDN8IGZpbGVJZD0xODQwMDAwMTAwMDQzNzMxNjMgc291cmNlU2VydmljZU5hbWU9YXNzZXRzLnNiLmRhbnNrZXNwaWwuZGsgc2l0ZWlkPTc1MzQ0OTYgc3VpZD0yMDY2NjEyIHJlcXVlc3RDbGllbnRBcHBsaWNhdGlvbj1Nb3ppbGxhLzUuMCAoV2luZG93cyBOVCAxMC4wOyBXaW42NDsgeDY0KSBBcHBsZVdlYktpdC81MzcuMzYgKEtIVE1MLCBsaWtlIEdlY2tvKSBDaHJvbWUvNTkuMC4zMDcxLjExNSBTYWZhcmkvNTM3LjM2IGRldmljZUZhY2lsaXR5PWZyYSBjczI9ZmFsc2UgY3MyTGFiZWw9SmF2YXNjcmlwdCBTdXBwb3J0IGNzMz1mYWxzZSBjczNMYWJlbD1DTyBTdXBwb3J0IGNzMT1OQSBjczFMYWJlbD1DYXAgU3VwcG9ydCBjczQ9YTkzZDVjODktODZiMC00NzdiLTk4OGItYTJlMzhhYmU0N2Y4IGNzNExhYmVsPVZJRCBjczU9OWVjZmFlY2Q1NjM3ODk1YWExMDA2MDRjMWVlZGZmMGY4NDE3NzExYTNmZmI2OGQzZTI0NzdlZDI4MzMxOWNjYmQ0YWU0NzhlNmU5MTI1NjJlNmY1YTllMGNmZGRmMzFiZGE5OGM1NWJmY2Q2YWFlNzExYzBhYTI0YzMwYTFhOTQ4MmE2NGM2YTBkY2MxZTk0NjY4NjI1NDNmYzA4YzQyMDJlZmZmZTA0MmU4MTdjNTMzYmE2YzQ5YmYxNWI4M2M3MTExNDI1NDVjZmRlNzgwYjFjZjQ4MzM4YjJkM2Q3YjA3ODU2YWRhNThkY2E5NWI2YjllN2Q2NWI5OTFjYjE4MiBjczVMYWJlbD1jbGFwcHNpZyBkcHJvYz1Ccm93c2VyIGNzNj1DaHJvbWUgY3M2TGFiZWw9Y2xhcHAgY2NvZGU9QVQgY2ljb2RlPVZpZW5uYSBjczc9NDguMjA0OSBjczdMYWJlbD1sYXRpdHVkZSBjczg9MTYuMzY2MiBjczhMYWJlbD1sb25naXR1ZGUgQ3VzdG9tZXI9RGFuc2tlIFNwaWwgc3RhcnQ9MTcxMjA0MTY2MzUxNiByZXF1ZXN0PWFzc2V0cy5zYi5kYW5za2VzcGlsLmRrL2V0Yy9wcm9maWxlIHJlcXVlc3RNZXRob2Q9R0VUIGFwcD1IVFRQIGFjdD1SRVFfQkxPQ0tFRF9DT09LSUVMRVNTX1NFU1NJT04gZGV2aWNlRXh0ZXJuYWxJZD03MzExMTQyNDUxNDEzMDY1IGNwdD0zODg0NiBzcmM9ODEuMTgxLjU2LjEyMyBlbmQ9MTcxMjA0MTY2MzUxNyBmaWxlVHlwZT0zMDcwNDEgZmlsZVBlcm1pc3Npb249MCBjczk9IGNzOUxhYmVsPVJ1bGUgbmFtZSJ9LCJpc19qc29ubCI6ZmFsc2UsImVycm9yIjpudWxsfQ%3D%3D
+
+Please advise how to fix it ?
