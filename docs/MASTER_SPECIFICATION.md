@@ -1,8 +1,8 @@
 # VECTOR SMART GATE: MASTER SPECIFICATION & QA ACCEPTANCE REPORT
 ### Tài Liệu Toàn Diện Hợp Nhất: Đặc Tả Nghiệp Vụ, Kiến Trúc Kỹ Thuật & Nghiệm Thu Chất Lượng
-**Phiên bản hệ thống:** `v2.5.0`  
-**Docker Hub Release:** `l1ghtg3m/vector-gate:2.4.3` | `l1ghtg3m/vector-gate:latest`  
-**Cổng Ingress tập trung:** Duy nhất `0.0.0.0:5000` (TCP/UDP Multiplexing)  
+**Phiên bản hệ thống:** `v2.5.6 - Enterprise Production Release`  
+**Docker Hub Release:** `l1ghtg3m/vector-gate:2.5.6` | `l1ghtg3m/vector-gate:latest`  
+**Cổng Ingress tập trung:** Duy nhất `0.0.0.0:5000` (TCP/UDP Multiplexing) & Telemetry `9100`  
 **Thông lượng đo kiểm:** `> 10,800,000 Events/giây` | **Bộ nhớ RAM:** `~23.7 MiB`  
 
 ---
@@ -19,6 +19,7 @@
 - [Chương I.7: 7. Bộ Đóng Gói Test & Benchmark Hiệu Năng Độc Lập Cho Vector Gate](#ba-7)
 - [Chương I.8: 8. Pipeline Xử Lý Log Sự Kiện Windows & Tối Ưu Hóa Parquet Cho IR / DFIR](#ba-8)
 - [Chương I.9: 9. Module Nguồn Pure-Rust Đọc Log Windows Event Không Cần Win32 API](#ba-9)
+- [Chương I.10: 10. Kiến Trúc 5 Trụ Cột Nâng Cấp Universal & Transparent IP TPROXY (v2.5.6)](#ba-10)
 
 ### [PHẦN II: BÁO CÁO NGHIỆM THU CHẤT LƯỢNG (QUALITY ASSURANCE - QA)](#phan-2-qa)
 - [Chương II.1: 1. Nghiệm Thu Bộ 15 Giao Thức Push Tiêu Chuẩn (24/24 Test Cases 100% Pass)](#qa-1)
@@ -29,6 +30,7 @@
 - [Chương II.6: 6. Nghiệm Thu Bứt Phá Hiệu Năng Turbo-Kernel (10.9M EPS, 19µs Latency, 21.78 MiB RAM)](#qa-6)
 - [Chương II.7: 7. Nghiệm Thu Bộ Nguồn Windows Event File (Pure-Rust Engine)](#qa-7)
 - [Chương II.8: 8. Nghiệm Thu Bản Vector Portable Turbo Trên Tệp Log 2.02 GB](#qa-8)
+- [Chương II.9: 9. Nghiệm Thu Toàn Diện 14 Test Suites Cho 5 Trụ Cột & Transparent IP (100% Pass)](#qa-9)
 
 ### [PHẦN III: BÁO CÁO RÀ SOÁT RỦI RO KIẾN TRÚC & PHÒNG VỆ VẬN HÀNH (ENTERPRISE RISK & HARDENING)](#phan-3-risk)
 - [Chương III.1: 1. Ma Trận Đánh Giá Mức Độ Nghiêm Trọng Rủi Ro Enterprise (Risk Severity Matrix)](#risk-1)
@@ -2962,3 +2964,58 @@ Khi mở rộng hạ tầng sang các mô hình Doanh nghiệp phức hợp:
   7. `deep_e2e`: 27/27 PASS
   8. `multigate`: 9/9 PASS
 - **Thông Lượng Thực Đo**: Hop A (Gate -> Source) đạt **5,947,336 EPS** với độ trễ chuyển tiếp chỉ **168 nanoseconds** (~0.0001 ms). Zero-Warning tuyệt đối trên toàn bộ hệ thống.
+
+
+<a id='ba-10'></a>
+---
+## CHƯƠNG I.10: 10. Kiến Trúc 5 Trụ Cột Nâng Cấp Universal & Transparent IP TPROXY (v2.5.6)
+
+### 1. Bối Cảnh Nâng Cấp & Tầm Nhìn Kiến Trúc
+Phiên bản `v2.5.6` đánh dấu bước chuyển mình toàn diện của Vector Smart Gate sang một nền tảng **Universal & Highly Flexible**, xóa bỏ hoàn toàn các giả định cứng nhắc và điểm mù kỹ thuật:
+- **Trụ Cột 1 (Multi-Protocol Ingress)**: Nhận diện chuẩn xác **Syslog RFC 6587 (Octet-Counted Framing)** với tiền tố độ dài byte (ví dụ `105 <14>...`), phân giải xung đột HTTP/2 gRPC giữa OTel và VectorNative, kích hoạt Dual-Stack IPv4 / IPv6 socket (`set_only_v6(false)`).
+- **Trụ Cột 5 (Elastic Buffering & Dedupe)**: Chuyển đổi chính sách buffer disk sang `when_full: drop_newest`, **loại bỏ hoàn toàn nguy cơ Pipeline Deadlock làm tê liệt cổng Ingress 5000** khi đĩa đầy. Bổ sung Sliding-Window Deduplication cho Beats Lumberjack.
+- **Trụ Cột 4 (Universal Onion VRL & Schema Auto-Discovery)**:
+  - Bổ sung **Generic Cisco ASA Regex** (`%ASA-(?P<severity>\d)-(?P<msg_id>\d+):\s+(?P<asa_message>.*)$`) bắt trọn mọi thông điệp ASA (Deny, ACL, Teardown, Routing...).
+  - Chuẩn hóa key-value SIEM cho CheckPoint CEF (`.src_ip`, `.dst_ip`, `.dst_port`, `.action`).
+  - **Zero-Day Dynamic Schema Auto-Discovery**: Tự động nhận diện và bóc tách cấu trúc cho JSON và Key-Value (`k=v`) của thiết bị lạ trước khi rơi vào dead-letter.
+- **Trụ Cột 6 (Native Observability & Telemetry)**:
+  - Tích hợp Prometheus Metrics Exporter trực tiếp trên cổng Ingress 5000 (`/metrics`) và cổng Dedicated 9100.
+  - Endpoint siêu nhẹ `/gate_health` trả về JSON trạng thái trong $< 1\,\text{ms}$.
+  - Tự động phát cảnh báo bảo vệ qua Telegram Bot API về Chat ID `1272211313`.
+- **Trụ Cột 2 (Elastic Kernel-Tuned Performance Engine)**:
+  - **Bidirectional Pipe Shrinking**: Khi có burst tải, pipe tự nở lên $256\,\text{KB}$; khi lưu lượng rút về bình thường ($\le 32\,\text{KB}$), hệ thống tự gọi `fcntl(F_SETPIPE_SZ, 64KB)` để thu hồi RAM kernel page pool, tiết kiệm $75\%$ RAM cho hàng ngàn kết nối idle.
+  - **Adaptive TCP Timeouts**: Đọc RTT kết nối từ `getsockopt(TCP_INFO)` của Linux kernel.
+- **Transparent IP (Kernel TPROXY)**: Sử dụng `IP_TRANSPARENT` và Linux Policy Routing table 100 bên trong container để bảo tồn $100\%$ Source IP tầng mạng L3/L4 vào Vector Core.
+
+---
+
+<a id='qa-9'></a>
+---
+## CHƯƠNG II.9: 9. Nghiệm Thu Toàn Diện 14 Test Suites Cho 5 Trụ Cột & Transparent IP (100% Pass)
+
+Hệ thống Vector Smart Gate v2.5.6 đã vượt qua xuất sắc toàn bộ **14 Test Suites** trong test framework tự động:
+
+```
+======================================================================
+📊 AGGREGATED TEST EXECUTION SUMMARY (Unified Runner: v2.5.6)
+======================================================================
+  • matrix         : ✅ PASSED (8/8 cases)
+  • onion          : ✅ PASSED (6/6 cases)
+  • protocols      : ✅ PASSED (12/12 cases)
+  • chaos          : ✅ PASSED (7/7 cases)
+  • beats_rsk      : ✅ PASSED (5/5 cases)
+  • chaos_beats_100: ✅ PASSED (100 nodes stress simulation)
+  • deep_e2e       : ✅ PASSED (4/4 cases)
+  • multigate      : ✅ PASSED (6/6 cases)
+  • transparent_ip : ✅ PASSED (6/6 cases - L3/L4 IP preservation)
+  • pillar1        : ✅ PASSED (3/3 cases - Multi-Protocol RFC 6587)
+  • pillar2        : ✅ PASSED (4/4 cases - Bidirectional Splice Shrinking)
+  • pillar4        : ✅ PASSED (4/4 cases - Onion VRL & Auto-Discovery)
+  • pillar5        : ✅ PASSED (3/3 cases - Elastic Buffer drop_newest)
+  • pillar6        : ✅ PASSED (5/5 cases - Prometheus Exporter 5000/9100)
+======================================================================
+🎉 ALL 14 TEST SUITES PASSED (100.0% SUCCESS RATE)
+======================================================================
+```
+* **Đóng gói phát hành chính thức:** `l1ghtg3m/vector-gate:2.5.6` & `l1ghtg3m/vector-gate:latest`
+* **Release Tag:** `v2.5.6`

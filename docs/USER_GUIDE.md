@@ -1,7 +1,7 @@
-# HƯỚNG DẪN CẤU HÌNH VÀ TƯƠNG TÁC TOÀN DIỆN (VECTOR SMART GATE v2.2.0)
+# HƯỚNG DẪN CẤU HÌNH VÀ TƯƠNG TÁC TOÀN DIỆN (VECTOR SMART GATE v2.5.6)
 **Tài liệu hướng dẫn người dùng vận hành, thiết lập định tuyến và kiểm thử tương tác**  
-**Image Docker Hub:** `l1ghtg3m/vector-gate:2.2.0` (hoặc `l1ghtg3m/vector-gate:latest`)  
-**Ingress Port duy nhất:** `0.0.0.0:5000` (TCP/UDP Multiplexing)  
+**Image Docker Hub:** `l1ghtg3m/vector-gate:2.5.6` (hoặc `l1ghtg3m/vector-gate:latest`)  
+**Ingress Port duy nhất:** `0.0.0.0:5000` (TCP/UDP Multiplexing) & Telemetry Port `9100`  
 
 ---
 
@@ -672,3 +672,72 @@ Kết quả thành công sẽ hiển thị danh sách tất cả các route đã
 ---
 **Vector Smart Gate v2.2.0** — Thiết kế và tối ưu cho quy mô lớn, siêu nhẹ và an toàn tuyệt đối.
 
+
+
+---
+
+## 8. HƯỚNG DẪN CÁC TÍNH NĂNG MỚI (ENTERPRISE RELEASE v2.5.6)
+
+### 8.1. Thu thập Prometheus Metrics thời gian thực (Native Exporter)
+Vector Gate v2.5.6 tích hợp sẵn bộ phát sinh Prometheus Metrics dạng text format chuẩn OpenMetrics:
+
+**Cách 1: Scrape trực tiếp qua cổng Ingress 5000**
+```bash
+curl http://127.0.0.1:5000/metrics
+```
+*Không cần mở thêm bất kỳ port nào trên firewall.*
+
+**Cách 2: Scrape qua cổng Dedicated Telemetry 9100**
+```bash
+curl http://127.0.0.1:9100/metrics
+```
+*Cổng chuẩn để tích hợp trực tiếp vào Prometheus `scrape_configs` hoặc Datadog/Grafana Agent.*
+
+**Mẫu kết quả trả về:**
+```text
+# HELP vector_gate_total_connections_total Total client TCP connections accepted by Vector Gate
+# TYPE vector_gate_total_connections_total counter
+vector_gate_total_connections_total 12840
+# HELP vector_gate_protocol_connections_total Connections classified by protocol
+# TYPE vector_gate_protocol_connections_total counter
+vector_gate_protocol_connections_total{protocol="syslog"} 8512
+vector_gate_protocol_connections_total{protocol="beats"} 3140
+vector_gate_protocol_connections_total{protocol="http"} 1188
+# HELP vector_gate_uptime_seconds Process uptime in seconds
+# TYPE vector_gate_uptime_seconds gauge
+vector_gate_uptime_seconds 43200
+```
+
+### 8.2. Kiểm tra sức khỏe Gate siêu tốc (`/gate_health`)
+Dành cho Kubernetes Liveness/Readiness probe hoặc Docker healthcheck:
+```bash
+curl http://127.0.0.1:5000/gate_health
+# Trả về: {"status":"healthy","engine":"vector-smart-gate","uptime_sec":43200}
+```
+
+### 8.3. Bật bảo toàn IP Nguồn (Transparent IP / Linux TPROXY)
+Để Vector Core và SIEM nhận diện chính xác IP nguồn của client (thay vì `127.0.0.1`):
+1. Trong file `deploy/docker-compose.yml`, bổ sung `cap_add: [NET_ADMIN]`.
+2. Trong cấu hình `options:`, thiết lập `transparent_ip: true`:
+   ```yaml
+   gates:
+     main_gate:
+       address: "0.0.0.0:5000"
+       options:
+         transparent_ip: true
+   ```
+
+### 8.4. Gửi Syslog RFC 6587 (Octet-Counted Framing)
+Hệ thống hỗ trợ chuẩn Syslog octet-counted framing theo RFC 6587:
+```bash
+echo -ne "105 <14>1 2026-10-26T12:00:00Z myhost myapp 1234 - - Event log message formatted via RFC 6587 octet counting\n" | nc 127.0.0.1 5000
+```
+
+### 8.5. Tự Động Khám Phá Lược Đồ Cho Thiết Bị Lạ (Schema Auto-Discovery)
+Đối với các thiết bị mạng hoặc ứng dụng mới chưa có bộ giải mã (parser) riêng:
+- Nếu log gửi đến là JSON (ví dụ: `{"app":"billing","amount":500}`), Gate sẽ tự động phân rã vào root và gán `_auto_discovered_format = "json"`.
+- Nếu log gửi đến là Key-Value (ví dụ: `src=10.0.0.1 dst=8.8.8.8 action=drop`), Gate sẽ tự động phân rã thành các trường riêng biệt và gán `_auto_discovered_format = "key_value"`.
+- Log hoàn toàn không bị mất mát hay rơi vào lỗi unparsed!
+
+---
+**Vector Smart Gate v2.5.6 Enterprise Release** — Nền tảng Log Gateway Toàn Năng, Hiệu Năng Tối Thượng và Thích Ứng Động Toàn Diện.
