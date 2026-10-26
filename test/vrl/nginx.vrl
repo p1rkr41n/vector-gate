@@ -1,0 +1,10 @@
+# Nginx / Apache Combined Access Log Parser Plugin
+if is_string(.message) && match(string!(.message), r'^[0-9.]+ - [^ ]+ \[') {
+    parsed, err = parse_common_log(.message)
+    if err == null {
+        . = merge(., parsed)
+        .parsed = true
+        .parser_applied = "nginx_combined"
+    }
+}
+

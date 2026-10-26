@@ -1,0 +1,8 @@
+{
+  "tag": "app.docker.container",
+  "timestamp": 1729764938,
+  "record": {
+    "container_name": "redis_cluster",
+    "log": "DB 0: 45 keys in 256 slots"
+  }
+}

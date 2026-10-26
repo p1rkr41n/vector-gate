@@ -15,7 +15,10 @@ import tempfile
 import time
 
 VECTOR_BIN = "/usr/local/bin/vector"
-GATE_BIN = "/home/manager/vectormod/docker_gate/bin/vector-gate"
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+GATE_BIN = os.path.join(TEST_DIR, "bin", "vector-gate")
+if not os.path.exists(GATE_BIN):
+    GATE_BIN = "/home/manager/vectormod/raproxy/target/release/raproxy"
 WORKDIR = "/tmp/test_vector_matrix"
 
 def setup():

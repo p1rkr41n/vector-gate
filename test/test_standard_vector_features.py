@@ -14,7 +14,10 @@ import sys
 import tempfile
 import time
 
-BINARY_PATH = "/home/manager/vectormod/docker_gate/bin/vector-gate"
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+BINARY_PATH = os.path.join(TEST_DIR, "bin", "vector-gate")
+if not os.path.exists(BINARY_PATH):
+    BINARY_PATH = "/home/manager/vectormod/raproxy/target/release/raproxy"
 TEST_TMP_DIR = "/tmp/vector_standard_qa"
 
 def setup_env():

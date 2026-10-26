@@ -1,0 +1,14 @@
+data_dir: "/tmp/vector_test_data"
+
+sources:
+  in_http:
+    type: "http"
+    address: "0.0.0.0:8080"
+    encoding: "ndjson"
+
+sinks:
+  sink_blackhole:
+    type: "blackhole"
+    inputs: ["in_http"]
+    print_interval_secs: 10
+

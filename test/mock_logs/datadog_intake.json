@@ -1,0 +1,11 @@
+[
+  {
+    "timestamp": 1792924226000,
+    "message": "Payment processing completed",
+    "status": "info",
+    "hostname": "payment-node-02",
+    "service": "payment-api",
+    "ddsource": "java",
+    "ddtags": "env:production,version:1.2.0"
+  }
+]

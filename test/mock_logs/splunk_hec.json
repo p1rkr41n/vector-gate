@@ -1,0 +1,11 @@
+{
+  "time": 1729764936,
+  "host": "splunk-forwarder-01",
+  "source": "kube:pod:nginx",
+  "sourcetype": "_json",
+  "event": {
+    "action": "blocked",
+    "client_ip": "203.0.113.19",
+    "reason": "rate_limit_exceeded"
+  }
+}

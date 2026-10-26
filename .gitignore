@@ -1,24 +1,44 @@
-# Build targets
+# Git & JJ Ignore for vectormod
+
+# Trash directory for retired files
+trash/
+tele_offset.txt
+
+# Large data & archives
+*.zip
+*.tar.gz
+*.evtx
+large_sample_2gb.evtx
+
+# Go runtime & binaries
+go/
+vector-portable/
+
+# Cargo build artifacts
 target/
 **/target/
-*.o
-*.a
-*.so
+Cargo.lock
 
-# Docker & runtime logs
-docker_gate/output/
+# Test outputs & logs
+smart_ingress/output/
+test/ingress/output/
+test/ingress/logs/
+test/ingress/data/
+test/bin/
 docker_gate/bin/
+docker_gate/output/
 *.log
 *.ndjson
-
-# Environment & credentials
-.env
-*.token
-tele_offset.txt
+*.jsonl
 inbox_history.jsonl
+.last_offset
+.agents/skills/telegram-listener/.last_offset
+vrl-mod/bin/
+vrl-mod/scratch/
+vrl-mod/tests/qa_data/*.evtx
 
-# IDE & OS
-.idea/
-.vscode/
-*.swp
-.DS_Store
+# Analysis tarballs
+haproxy_analysis/haproxy-2.8.tar.gz
+haproxy_analysis/haproxy-2.8.10/
+
+test/bin/

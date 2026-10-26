@@ -31,19 +31,16 @@ docker run -d \
   l1ghtg3m/vector-gate:2.4.3
 ```
 
-### 2. Tự Build Hoàn Chỉnh Từ Mã Nguồn (Build Image From Scratch)
-Dự án được trang bị sẵn **Multi-Stage Dockerfile** (Rust 1.80+ Builder -> Vector Runtime) cho phép tự động biên dịch và tạo image production hoàn chỉnh mà không cần cài đặt thêm bất kỳ công cụ nào trên máy chủ:
+### 2. Tự Build Hoàn Chỉnh Từ Mã Nguồn (Build Image From Source)
+Toàn bộ Dockerfile, Docker Compose và file cấu hình runtime được quy hoạch độc lập trong thư mục `docker_gate/`:
 
 ```bash
-# Cách 1: Sử dụng Docker Compose (Khuyên dùng)
+# Di chuyển vào thư mục docker_gate và khởi động container:
+cd docker_gate
 docker compose up -d --build
 
-# Cách 2: Sử dụng Makefile
-make build && make run
-
-# Cách 3: Sử dụng Docker CLI thuần
-docker build -t l1ghtg3m/vector-gate:2.4.3 -t l1ghtg3m/vector-gate:latest .
-docker run -d --name vector-smart-gate -p 5000:5000 l1ghtg3m/vector-gate:2.4.3
+# Hoặc khởi chạy từ thư mục gốc:
+docker compose -f docker_gate/docker-compose.yml up -d --build
 ```
 
 ### 3. Kiểm tra container hoạt động
@@ -52,15 +49,34 @@ docker ps
 # Kiểm tra tài nguyên RAM (~23.7 MiB):
 docker stats vector-smart-gate --no-stream
 # Gửi kiểm tra health check qua cổng 5000:
-make test
+curl -sf http://127.0.0.1:5000/ -X POST -H "Content-Type: application/json" -d '{"ping":"vector-gate-ok"}'
+```
+
+---
+
+## 📁 CẤU TRÚC DỰ ÁN ĐÃ ĐƯỢC LÀM SẠCH (PROJECT ARCHITECTURE)
+
+Dự án được phân tách nghiêm ngặt, rành mạch và loại bỏ hoàn toàn sự phân mảnh:
+
+```
+vector-gate/
+├── docker_gate/      # Toàn bộ hạ tầng container (Dockerfile, docker-compose.yml, config/vector.yaml, vrl/)
+├── docs/             # Toàn bộ hồ sơ tài liệu kỹ thuật (MASTER_SPECIFICATION, USER_GUIDE, QA, VRL Audits)
+├── raproxy/          # Mã nguồn cốt lõi (Rust Ingress Daemon, Zero-Copy Splice Engine, Magic Recognizer)
+├── raw_data/         # Dữ liệu phân tích thô & Thư mục samples/ (15 giao thức mẫu + script test)
+│   └── samples/      # Tập con dữ liệu mẫu chuẩn (samples.json, send_samples.py, catalog tra cứu)
+├── test/             # Toàn bộ bài kiểm thử tự động (Python QA, Chaos, Stress, Matrix, Shell runner) & Ingress
+├── README.md         # Tài liệu tổng quan dự án
+├── .dockerignore     # Danh mục tối ưu build context Docker
+└── .gitignore        # Danh mục loại trừ tệp tạm, thùng rác trash/ và dữ liệu lớn
 ```
 
 ---
 
 ## 📋 TÀI LIỆU HƯỚNG DẪN CHI TIẾT
-* 📖 [**USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
-* 🧪 [**tests/README.md** (Thư Mục Kiểm Thử Tự Động Hóa Tập Trung)](tests/README.md): Bộ QA test suites tự động hóa (Python) gồm Standard Vector Matrix, Onion VRL, 15 Giao thức Ingress, Chaos Engineering, và runner [`tests/run_all_tests.py`](tests/run_all_tests.py).
-* 📦 [**samples/README.md** (Bộ Dữ Liệu Mẫu & Test Dispatcher)](samples/README.md): Bảng tra cứu 15 giao thức mẫu và script bắn test tự động [`samples/send_samples.py`](samples/send_samples.py).
+* 📖 [**docs/USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](docs/USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
+* 🧪 [**test/README.md** (Thư Mục Kiểm Thử Tự Động Hóa Tập Trung)](test/README.md): Bộ QA test suites tự động hóa (Python) gồm Standard Vector Matrix, Onion VRL, 15 Giao thức Ingress, Chaos Engineering, và runner [`test/run_all_tests.py`](test/run_all_tests.py).
+* 📦 [**raw_data/samples/README.md** (Bộ Dữ Liệu Mẫu & Test Dispatcher)](raw_data/samples/README.md): Bảng tra cứu 15 giao thức mẫu và script bắn test tự động [`raw_data/samples/send_samples.py`](raw_data/samples/send_samples.py).
 * 🔬 [**docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md** (Báo Cáo Đối Soát 641 Issues Upstream)](docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md): Phân tích chi tiết 8 Use Cases trọng yếu, đánh giá khả năng sửa lỗi & năng lực phòng vệ 641 issues VRL trên Vector Gate v2.4.3.
 * 📚 [**docs/MASTER_SPECIFICATION.md** (Hồ sơ Thiết kế Kỹ thuật & Báo cáo Nghiệm thu Master)](docs/MASTER_SPECIFICATION.md): Tài liệu tổng hợp toàn diện bao gồm toàn bộ Phân tích nghiệp vụ (BA) và Nghiệm thu chất lượng (QA) của toàn hệ thống Vector Gate.
 * 🏗️ [**docs/BA_MASTER_SPECIFICATION.md**](docs/BA_MASTER_SPECIFICATION.md): Đặc tả phân tích nghiệp vụ hợp nhất 9 chương kiến trúc (Zero-Port, Turbo-Kernel, Onion VRL, Custom Rules...).
@@ -137,13 +153,13 @@ sinks:
 ### 1. Chạy Bộ Kiểm Thử Tự Động Hóa (Python Test Suites)
 ```bash
 # Chạy toàn bộ bài test độc lập (Matrix + Onion VRL):
-make test-all
-# Hoặc chạy trực tiếp qua runner:
-python3 tests/run_all_tests.py
+python3 test/run_all_tests.py
 
-# Chạy riêng biệt từng bộ kiểm thử:
-make test-matrix   # 8 tính năng tiêu chuẩn của Vector Core VRL
-make test-onion    # Bóc tách phân tầng Onion và Hot-Drop SIGHUP
+# Hoặc chạy kiểm tra toàn diện cả E2E & Chaos:
+python3 test/run_all_tests.py --all
+
+# Bắn toàn bộ 15 giao thức mẫu vào Vector Gate:
+python3 raw_data/samples/send_samples.py --all
 ```
 
 ### 2. Bắn Dữ Liệu Thủ Công Qua Cổng 5000

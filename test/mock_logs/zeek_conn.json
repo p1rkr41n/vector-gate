@@ -1,0 +1,1 @@
+{"ts": 1729764933.123, "uid": "C9k2841XyZ", "id.orig_h": "192.168.1.50", "id.orig_p": 52341, "id.resp_h": "142.250.190.46", "id.resp_p": 443, "proto": "tcp", "service": "ssl", "duration": 0.245, "orig_bytes": 1520, "resp_bytes": 4890, "conn_state": "SF"}

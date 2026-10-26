@@ -1,0 +1,10 @@
+# Syslog RFC 5424 / RFC 3164 Parser Plugin
+if is_string(.message) && starts_with(string!(.message), "<") {
+    parsed, err = parse_syslog(.message)
+    if err == null {
+        . = merge(., parsed)
+        .parsed = true
+        .parser_applied = "syslog_rfc"
+    }
+}
+

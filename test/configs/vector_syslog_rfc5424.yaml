@@ -1,0 +1,14 @@
+data_dir: "/tmp/vector_test_data"
+
+sources:
+  in_syslog:
+    type: "syslog"
+    address: "0.0.0.0:5140"
+    mode: "tcp"
+
+sinks:
+  sink_blackhole:
+    type: "blackhole"
+    inputs: ["in_syslog"]
+    print_interval_secs: 10
+
