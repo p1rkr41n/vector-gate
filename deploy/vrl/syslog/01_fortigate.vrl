@@ -6,7 +6,7 @@
 #---
 parsed, err = parse_key_value(.message)
 if err == null {
-    . = merge!(., parsed)
+    . = merge(., parsed)
     .parsed = true
     .vendor = "Fortinet"
 }

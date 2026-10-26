@@ -6,7 +6,7 @@
 #---
 parsed, err = parse_apache_log(.message, "combined") ?? parse_common_log(.message)
 if err == null {
-    . = merge!(., parsed)
+    . = merge(., parsed)
     .parsed = true
     .vendor = "Nginx"
 }

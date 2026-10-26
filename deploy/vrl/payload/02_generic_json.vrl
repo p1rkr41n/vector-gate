@@ -11,7 +11,7 @@ if err == null {
         del(parsed.source_id)
         del(parsed.ingress_port)
         del(parsed.parsed)
-        . = merge!(., parsed)
+        ., err = merge(., parsed)
     } else {
         .payload = parsed
     }

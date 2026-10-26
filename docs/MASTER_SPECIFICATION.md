@@ -369,7 +369,7 @@ Chúng ta có hai mô hình tích hợp tùy thuộc vào mức độ coupling v
   5. Vòng đời (Graceful Shutdown, Reload SIGHUP) của Gate gắn chặt với Vector: khi Vector reload, Gate tự động cập nhật lại các routing targets mà không làm rớt kết nối TCP đang mở.
 
 ##### Mô Hình B: Tích Hợp Sidecar Siêu Tốc (Co-located Turbo Gatekeeper)
-* Gate chạy dưới dạng tiến trình độc lập (`raproxy` binary siêu nhẹ 823 KB) được quản lý tự động bởi Vector Supervisor hoặc Systemd.
+* Gate chạy dưới dạng tiến trình độc lập (`vector-gate` binary siêu nhẹ 823 KB) được quản lý tự động bởi Vector Supervisor hoặc Systemd.
 * **Ưu điểm**:
   - Không cần sửa đổi mã nguồn đồ sộ của Vector Core.
   - Tách biệt vùng lỗi (Fault Isolation): Nếu Vector bị crash do Out-of-Memory ở tầng transform, kết nối TCP tại Gate `:5000` vẫn được giữ vững ở tầng Kernel đệm socket, không làm rớt log của Client.
@@ -407,7 +407,7 @@ Chúng ta có hai mô hình tích hợp tùy thuộc vào mức độ coupling v
 ## CHƯƠNG I.2: 2. Đột Phá Hiệu Năng Turbo-Kernel (Zero-Copy splice(2), SO_REUSEPORT & Adaptive Pipe)
 
 ### ĐẶC TẢ PHÂN TÍCH NGHIỆP VỤ & THIẾT KẾ KỸ THUẬT (BA SPECIFICATION)
-#### DỰ ÁN: BỨT PHÁ HIỆU NĂNG ĐỘNG CƠ RAPROXY (RAPROXY TURBO-KERNEL)
+#### DỰ ÁN: BỨT PHÁ HIỆU NĂNG ĐỘNG CƠ VECTOR-GATE (VECTOR-GATE TURBO-KERNEL)
 ##### Tối Ưu Hóa Cấp Độ Nhân Linux: Zero-Copy `splice(2)`, `SO_REUSEPORT` & Low-Latency Socket Tuning
 
 ---
@@ -415,7 +415,7 @@ Chúng ta có hai mô hình tích hợp tùy thuộc vào mức độ coupling v
 | **Thuộc tính** | **Giá trị chi tiết** |
 |---|---|
 | **Tên dự án** | RAproxy Turbo-Kernel Performance Breakthrough |
-| **Mã dự án** | `RAPROXY-TURBO-KERNEL` |
+| **Mã dự án** | `VECTOR-GATE-TURBO-KERNEL` |
 | **Phiên bản tài liệu** | `v1.0 - Production Specification` |
 | **Ngày lập** | 24/10/2026 |
 | **Mục tiêu cốt lõi** | Nâng cấp động cơ RAproxy (Rust) bằng các công nghệ tối ưu hóa cấp độ nhân Linux (Zero-Copy `splice`, `SO_REUSEPORT`, `TCP_DEFER_ACCEPT`) để đạt công suất **$\ge 100,000 - 250,000 \text{ EPS}$**, độ trễ p99 **$< 0.5\text{ ms}$**, tiêu thụ RAM **$\le 5\text{ MB}$**. |
@@ -576,8 +576,8 @@ $$\text{Client Socket FD} \xrightarrow[\text{Zero-Copy}]{\text{splice(2)}} \text
   - Chạy bộ kiểm thử tải 100,000 sự kiện và 250,000 sự kiện.
   - Sử dụng công cụ giám sát đo đạc biểu đồ tài nguyên (CPU, RAM, latency).
 * **Giai đoạn 4 (Bàn giao & Nghiệm thu)**:
-  - Đóng gói binary `raproxy` tối ưu hóa.
-  - Xuất tài liệu nghiệm thu chất lượng `QA_REPORT_RAPROXY_TURBO.md`.
+  - Đóng gói binary `vector-gate` tối ưu hóa.
+  - Xuất tài liệu nghiệm thu chất lượng `QA_REPORT_VECTOR-GATE_TURBO.md`.
 
 
 
@@ -761,7 +761,7 @@ gate:
 
 ---
 
-#### 4. KIẾN TRÚC THỰC THI TRONG RUST ENGINE (`raproxy`)
+#### 4. KIẾN TRÚC THỰC THI TRONG RUST ENGINE (`vector-gate`)
 
 ```mermaid
 flowchart TD
@@ -840,7 +840,7 @@ flowchart TD
 #### 6. ĐỀ XUẤT HÀNH ĐỘNG TIẾP THEO (NEXT STEPS)
 
 Sau khi bạn xem xét và phê duyệt bản đặc tả BA này, tôi sẽ thực hiện ngay:
-1. **Refactor mã nguồn `raproxy`**: Chuyển đổi toàn bộ cấu trúc sang `UnifiedRoute` và mảng `routes:`.
+1. **Refactor mã nguồn `vector-gate`**: Chuyển đổi toàn bộ cấu trúc sang `UnifiedRoute` và mảng `routes:`.
 2. **Cập nhật `vector.yaml`**: Viết lại cấu hình mới siêu tinh gọn theo chuẩn BA.
 3. **Biên dịch Release & Đóng gói Docker Image v2.0.0**: Tag `l1ghtg3m/vector-gate:latest` và `2.0.0`.
 4. **Chạy bộ kiểm thử QA toàn diện**: Đảm bảo $100\%$ Test Cases ĐẠT chuẩn.
@@ -872,7 +872,7 @@ Sau khi bạn xem xét và phê duyệt bản đặc tả BA này, tôi sẽ th�
 #### 1. TỔNG QUAN NGHIỆP VỤ & BỐI CẢNH (BUSINESS BACKGROUND)
 
 ##### 1.1. Vấn Đề Thực Tế (Problem Statement)
-* Hiện tại, `vector-gate` (`raproxy`) đã hỗ trợ nhận diện và phân giải tự động 15 nguồn PUSH tiêu chuẩn (Syslog, Beats, Fluent, Splunk HEC, Datadog Agent, AWS Firehose, Heroku, Prometheus, OpenTelemetry, Vector Native, StatsD, dnstap, HTTP Server, Socket Raw).
+* Hiện tại, `vector-gate` (`vector-gate`) đã hỗ trợ nhận diện và phân giải tự động 15 nguồn PUSH tiêu chuẩn (Syslog, Beats, Fluent, Splunk HEC, Datadog Agent, AWS Firehose, Heroku, Prometheus, OpenTelemetry, Vector Native, StatsD, dnstap, HTTP Server, Socket Raw).
 * Tuy nhiên, trong thực tế triển khai Enterprise và Telco/IoT/Banking:
   1. **Các giao thức độc quyền (Proprietary Protocols)**: Thiết bị IoT, thiết bị y tế, camera an ninh, thiết bị SCADA/PLC hoặc hệ thống Core Banking (ISO-8583, FIX engine) gửi các gói tin có header nhị phân đặc thù.
   2. **Nhu cầu phân nhánh dịch vụ động (Dynamic Multi-tenancy)**: Khách hàng muốn điều hướng các luồng log có chữ ký đặc biệt (ví dụ `0xDEADBEEF` hoặc `"MYLOG"`) vào các cụm xử lý riêng biệt (ví dụ port `17001`, `17002`), hoàn toàn tách rời khỏi các pipeline mặc định.
@@ -919,7 +919,7 @@ Base64 length:        2 - 4 ký tự                    6 ký tự              
 
 ```mermaid
 flowchart TD
-    Client["Client / Log Shipper"] -->|Gửi kết nối TCP tới 0.0.0.0:5000| Gate["Vector Gate (raproxy Engine)"]
+    Client["Client / Log Shipper"] -->|Gửi kết nối TCP tới 0.0.0.0:5000| Gate["Vector Gate (vector-gate Engine)"]
     
     Gate --> Peek["Lấy mẫu Peek Window (256 - 512 bytes)\n(Không tiêu thụ dữ liệu từ Socket Buffer)"]
     
@@ -1105,7 +1105,7 @@ sinks:
 
 ---
 
-#### 3. KIẾN TRÚC VẬN HÀNH BÊN DƯỚI RUST ENGINE (`raproxy`)
+#### 3. KIẾN TRÚC VẬN HÀNH BÊN DƯỚI RUST ENGINE (`vector-gate`)
 
 ```mermaid
 flowchart TD
@@ -1310,8 +1310,8 @@ if is_string(.message) && contains(string!(.message), "%ASA-") {
 
 #### 5. Kế Hoạch Triển Khai Kỹ Thuật
 
-1. Cập nhật `raproxy/src/config.rs`: Thêm trường `vrl_dir` và `vrl_watch` vào `GateConfig`.
-2. Cập nhật `raproxy/src/main.rs`:
+1. Cập nhật `vector-gate/src/config.rs`: Thêm trường `vrl_dir` và `vrl_watch` vào `GateConfig`.
+2. Cập nhật `vector-gate/src/main.rs`:
    - Thêm module `vrl_synthesizer`: quét thư mục `vrl/` và sinh khối VRL transform tương ứng.
    - Thêm thread watcher theo dõi thư mục `vrl/`: khi có file mới/sửa/xóa, cập nhật config runtime và gửi `SIGHUP` tới tiến trình Vector con.
 3. Build binary `vector-gate` release, cập nhật Docker image `l1ghtg3m/vector-gate:2.3.0` & `latest`.
@@ -1970,7 +1970,7 @@ sinks:
 
 ```mermaid
 flowchart TD
-    Client["Clients / Agents / SIEM / Firewalls\n(15 Giao thức Push khác nhau)"] -->|Tất cả trỏ vào Cổng 5000| Gate["Vector Gate (raproxy)\n0.0.0.0:5000"]
+    Client["Clients / Agents / SIEM / Firewalls\n(15 Giao thức Push khác nhau)"] -->|Tất cả trỏ vào Cổng 5000| Gate["Vector Gate (vector-gate)\n0.0.0.0:5000"]
     
     subgraph "Phase 0: Sniffer L7 Sub-microsecond (<1.2µs)"
         Gate -->|Byte '<'| S1["Syslog (15514)"]
@@ -2055,7 +2055,7 @@ flowchart TD
 | **TC-CR-03** | **Custom Rule 3** | **Offset-based Magic (`offset=4`, `MAGIC`)** | `127.0.0.1:15515` | **✅ PASS** | **Matched rule `'custom_offset_signature'` (`TUFHSUM=`)** |
 | **TC-15-25** | **Hiệu năng cao** | Zero-Copy Splice Burst (20,000 logs) | Kernel Splice | **✅ PASS** | **7,142,745 EPS** (2.8ms) |
 | **TC-15-26** | **Tài nguyên** | Container Footprint (RAM / CPU) | Host Kernel | **✅ PASS** | **21.51 MiB RAM** / 9.57% CPU |
-| **TC-15-27** | **Lưu trữ đĩa** | [forwarded_logs.ndjson](file:///home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson) | Volume Mount | **✅ PASS** | Đã ghi nhận **102,522 bản ghi** hợp lệ |
+| **TC-15-27** | **Lưu trữ đĩa** | [forwarded_logs.ndjson](file:///home/manager/vectormod/deploy/output/forwarded_logs.ndjson) | Volume Mount | **✅ PASS** | Đã ghi nhận **102,522 bản ghi** hợp lệ |
 
 ---
 
@@ -2355,9 +2355,9 @@ Hệ thống sẽ:
 ### Báo Cáo Nghiệm Thu Chất Lượng (QA/QC Acceptance Test Report) - RAproxy v0.1.0
 
 **Ngày thực hiện**: 24/10/2026  
-**Dự án**: `vectormod` / `raproxy` (Rust Async Ingress Proxy Engine)  
+**Dự án**: `vectormod` / `vector-gate` (Rust Async Ingress Proxy Engine)  
 **Nền tảng mục tiêu**: Ubuntu Linux x86_64 / Container Platform  
-**Thực thi kiểm thử**: Binary Release `raproxy/target/release/raproxy` (787 KB)  
+**Thực thi kiểm thử**: Binary Release `vector-gate/target/release/vector-gate` (787 KB)  
 **Tích hợp**: Vector Core v0.58.0 (Internal Ingress Listeners)  
 **Kết quả chung**: **17/17 TEST CASES PASS (100.0% THÀNH CÔNG)** 🏆  
 
@@ -2380,7 +2380,7 @@ Hệ thống sẽ:
 
 | Mã TC | Kịch bản Kiểm Thử (Test Scenario) | Tham số & Dữ liệu Đầu Vào | Kết Quả Kỳ Vọng | Kết Quả Thực Tế | Trạng Thái |
 |:---:|:---|:---|:---|:---|:---:|
-| **TC-01** | CLI Options & Trợ giúp | `raproxy --help` | Hiển thị đầy đủ cờ cấu hình và thoát code 0 | Hiển thị đầy đủ thông tin `--bind`, `--syslog`, `--http`... | **PASS** |
+| **TC-01** | CLI Options & Trợ giúp | `vector-gate --help` | Hiển thị đầy đủ cờ cấu hình và thoát code 0 | Hiển thị đầy đủ thông tin `--bind`, `--syslog`, `--http`... | **PASS** |
 | **TC-02** | Sniffing: Syslog RFC 3164 (BSD) | Byte đầu `<134>Oct 24...` | Chuyển tiếp cổng `15514` | Ghi nhận kênh `syslog_rfc` | **PASS** |
 | **TC-03** | Sniffing: Syslog RFC 5424 (IETF) | Byte đầu `<165>1 2026-...` | Chuyển tiếp cổng `15514` | Phân tích cấu trúc IETF chính xác | **PASS** |
 | **TC-04** | Sniffing: Check Point CEF | `<134>... CEF:0\|Check Point` | Chuyển tiếp cổng `15514` | Giữ nguyên header CEF trong Syslog | **PASS** |
@@ -2414,8 +2414,8 @@ Hệ thống sẽ:
 ---
 
 #### 4. Hiện Trạng Triển Khai & Mã Nguồn
-* **Mã nguồn Engine**: [raproxy/src/main.rs](file:///home/manager/vectormod/raproxy/src/main.rs)
-* **Kịch bản kiểm thử tự động**: [raproxy/tests/qa_test_suite.py](file:///home/manager/vectormod/raproxy/tests/qa_test_suite.py)
+* **Mã nguồn Engine**: [vector-gate/src/main.rs](file:///home/manager/vectormod/vector-gate/src/main.rs)
+* **Kịch bản kiểm thử tự động**: [test/suites/test_15_protocols_ingress.py](file:///home/manager/vectormod/test/suites/test_15_protocols_ingress.py)
 * **Tệp cấu hình Vector tích hợp**: [smart_ingress/vector/vector_ingress.yaml](file:///home/manager/vectormod/smart_ingress/vector/vector_ingress.yaml)
 * **Tệp log đầu ra đã nghiệm thu**: [smart_ingress/output/all_forwarded_logs.jsonl](file:///home/manager/vectormod/smart_ingress/output/all_forwarded_logs.jsonl)
 
@@ -2427,7 +2427,7 @@ Hệ thống sẽ:
 ## CHƯƠNG II.6: 6. Nghiệm Thu Bứt Phá Hiệu Năng Turbo-Kernel (10.9M EPS, 19µs Latency, 21.78 MiB RAM)
 
 ### BÁO CÁO NGHIỆM THU CHẤT LƯỢNG & ĐO KIỂM HIỆU NĂNG (QA/QC REPORT)
-#### ĐỘNG CƠ RAPROXY TURBO-KERNEL (ZERO-COPY SPLICE & MULTI-QUEUE SO_REUSEPORT)
+#### ĐỘNG CƠ VECTOR-GATE TURBO-KERNEL (ZERO-COPY SPLICE & MULTI-QUEUE SO_REUSEPORT)
 ##### Đánh Giá Toàn Diện Sau Khi Triển Khai Nâng Cấp Cấp Độ Nhân Linux
 
 ---
@@ -2435,7 +2435,7 @@ Hệ thống sẽ:
 | **Thuộc tính** | **Giá trị nghiệm thu** |
 |---|---|
 | **Dự án** | Smart Ingress Protocol Multiplexer for Vector Core |
-| **Động cơ thực thi** | `raproxy` v0.2.0 (Turbo-Kernel Release) |
+| **Động cơ thực thi** | `vector-gate` v0.2.0 (Turbo-Kernel Release) |
 | **Ngôn ngữ & Nền tảng** | Rust 1.75 / Tokio Reactor / Linux Kernel 6.8 (Ubuntu 24.04 LTS) |
 | **Ngày kiểm thử** | 24/10/2026 |
 | **Trạng thái nghiệm thu** | **100% ĐẠT CHUẨN (ALL TESTS PASSED)** |
@@ -2483,7 +2483,7 @@ Hệ thống sẽ:
 
 #### 3. CÁC NÂNG CẤP KỸ THUẬT ĐÃ TRIỂN KHAI
 
-##### 3.1. Zero-Copy Kernel Splice (`raproxy/src/splice.rs`)
+##### 3.1. Zero-Copy Kernel Splice (`vector-gate/src/splice.rs`)
 * Thay thế hoàn toàn vòng lặp copy `client -> user buffer -> backend` bằng cặp system call `libc::splice`:
   $$\text{Client Socket} \xrightarrow[\text{Zero-Copy}]{\text{splice}} \text{Kernel Pipe} \xrightarrow[\text{Zero-Copy}]{\text{splice}} \text{Backend Socket}$$
 * Sử dụng `tokio::net::TcpStream::async_io` tích hợp mượt mà với Reactor Epoll của Tokio.
@@ -2898,3 +2898,20 @@ fs.file-max = 2097152
 
 
 
+
+## CHƯƠNG III.5: Nghiệm Thu Kỹ Thuật v2.4.3: Hóa Giải Toàn Diện Sự Cố Beats & Rủi Ro P0-P2 (Zero-Touch Client Architecture)
+
+### 1. Bối Cảnh Nghiệp Vụ & Ràng Buộc Vận Hành
+Khi vận hành thực tế hệ thống giám sát trên 100+ máy trạm Filebeat / Winlogbeat đặt tại các chi nhánh/đơn vị ở vùng sâu vùng xa, đường truyền 4G/WAN thường xuyên bị ngắt chập chờn mà không phát sinh TCP FIN/RST (Silent Drop). Việc can thiệp trực tiếp vào file cấu hình trên 100 máy trạm là bất khả thi do rào cản phân tán địa lý và quyền quản trị.
+
+### 2. Mô Hình 4 Trụ Cột Bù Đắp Phía Server (Server-Side Compensation)
+Toàn bộ cụm Vector Smart Gate v2.4.3 được nâng cấp để gánh 100% khiếm khuyết của các client Beats mặc định:
+1. **Early-ACK trong 2ms (`in_beats.acknowledgements: false`)**: Trả ACK ngay khi batch vào RAM, triệt tiêu hoàn toàn nguy cơ chạm ngưỡng timeout 30s của Filebeat.
+2. **Khử trùng lặp tự động (`dedupe_beats` transform)**: Tự động loại bỏ 100% log trùng khi Filebeat rớt mạng và reconnect resend.
+3. **Mở rộng bộ đệm socket lên 4MB & Disk Buffer 10GB**: Hấp thụ trọn vẹn các mẻ `bulk_max_size: 2048` mà không gây TCP Zero Window.
+4. **Cắt kết nối ma trong 15 giây & Google BBR Kernel**: Tiêu diệt toàn bộ socket chết lâm sàng qua `TCP_USER_TIMEOUT = 15s`, duy trì thông lượng ổn định trên đường truyền mất gói qua thuật toán TCP BBR.
+
+### 3. Kết Quả Nghiệm Thu Thực Nghiệm Đối Chứng (Chaos 100 Nodes)
+- **Rơi rớt ACK khi Client Half-Close:** Giảm từ **100% thất bại (0/20)** ở bản cũ xuống **0% thất bại (20/20 nhận đủ 100%)** ở bản v2.4.3.
+- **Log trùng lặp khi Beat Resend:** Giảm từ **100% trùng lặp (30/30)** ở bản cũ xuống **0% trùng lặp (0 duplicate, 100% deduplicated)** ở bản v2.4.3.
+- **Tỷ lệ vượt qua kiểm thử tự động:** **100.0% PASS trên toàn bộ 7/7 Test Suites (67/67 test cases)**.

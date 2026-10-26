@@ -6,7 +6,7 @@
 
 | **Thuộc tính** | **Giá trị phân tích** |
 |:---|:---|
-| **Hệ thống đối chiếu** | Vector Smart Gate v2.4.3 (`raproxy` Turbo-Kernel + Vector Core v0.58.0+) |
+| **Hệ thống đối chiếu** | Vector Smart Gate v2.4.3 (`vector-gate` Turbo-Kernel + Vector Core v0.58.0+) |
 | **Tổng số issues khảo sát** | **641 issues** (Toàn bộ kho dữ liệu `vectordotdev/vrl` và `vectordotdev/vector`) |
 | **Phân bổ trạng thái** | **272 Open issues** (Chưa đóng thượng nguồn) \| **369 Closed issues** (Đã đóng thượng nguồn) |
 | **Số lượng Bug & Lỗi kỹ thuật** | **69 issues** (Bao gồm Panics, Crashes, Type Infallibility, Parsing Failures) |
@@ -47,7 +47,7 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
 
 | Nhóm Đánh Giá | Số lượng | Tỷ lệ | Ý nghĩa thực tế trên Vector Gate |
 |:---|:---:|:---:|:---|
-| **Đã Khắc Phục Triệt Để (Fixed)** | **412** | 64.3% | Đã được vá trực tiếp trong mã nguồn Rust (`raproxy`), cấu hình Vector Core v0.58.0+, hoặc thông qua các bộ quy tắc transpile. |
+| **Đã Khắc Phục Triệt Để (Fixed)** | **412** | 64.3% | Đã được vá trực tiếp trong mã nguồn Rust (`vector-gate`), cấu hình Vector Core v0.58.0+, hoặc thông qua các bộ quy tắc transpile. |
 | **Miễn Nhiễm Nhờ Kiến Trúc (Architecturally Mitigated)** | **148** | 23.1% | Bản thân VRL gốc vẫn còn lỗi, nhưng hệ thống Vector Gate sử dụng **Phase 0 Gate Multiplexer**, **Onion VRL Routing** hoặc **Dead Letter Fallback** khiến lỗi không bao giờ kích hoạt được. |
 | **Tính Năng Chờ Upstream (Upstream Pending)** | **81** | 12.6% | Các đề xuất tính năng cú pháp dài hạn của VRL (như vòng lặp `for` có `break/continue`, trình biên dịch JIT bytecode, Web Playground). Không ảnh hưởng tới luồng vận hành log. |
 
@@ -68,12 +68,12 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
 #### 2. Trạng Thái Trên Vector Gate: **✅ ĐÃ KHẮC PHỤC TRIỆT ĐỂ (RESOLVED BY ONION ARCHITECTURE)**
 
 #### 3. Cơ Chế Xử Lý & Giải Pháp Kỹ Thuật:
-1. **Phân Tầng Onion VRL (`docker_gate/vrl/syslog/`)**:
+1. **Phân Tầng Onion VRL (`deploy/vrl/syslog/`)**:
    Vector Gate xóa bỏ hoàn toàn tư duy "Một hàm VRL xử lý tất cả". Thay vào đó, luồng dữ liệu đi qua chuỗi phân tầng chuyên biệt:
    - `01_fortigate.vrl`: Dùng `parse_key_value` có bọc Fallback `?? {}`, giải quyết triệt để lỗi kết thúc chuỗi bằng delimiter ([VRL-#1536](https://github.com/vectordotdev/vrl/issues/1536)).
    - `02_cisco_asa.vrl`: Dùng regex neo chuỗi `%ASA-\d+-\d+:` bóc tách riêng trường `cisco_tag` và `cisco_code`.
    - `03_checkpoint_cef.vrl`: Bóc tách CEF header riêng biệt bằng regex delimiter `|`, không dựa vào parser `parse_cef` nội bộ để tránh lỗi dấu nháy ([VRL-#1352](https://github.com/vectordotdev/vrl/issues/1352)).
-2. **Cầu Chì Chống Mất Log (`docker_gate/vrl/99_dead_letter_fallback.vrl`)**:
+2. **Cầu Chì Chống Mất Log (`deploy/vrl/99_dead_letter_fallback.vrl`)**:
    Khi một gói tin bị lỗi cú pháp hoàn toàn và không parser nào nhận diện được, sự kiện rơi xuống tầng cuối cùng `99_dead_letter_fallback.vrl`:
    ```vrl
    if !exists(.parsed) || .parsed == false {
@@ -130,7 +130,7 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
 1. **Nâng cấp Runtime Nhân Vector Core**:
    Vector Gate tích hợp nhân `timberio/vector:latest-debian` (v0.58.0+), đã bao gồm các bản sửa lỗi upstream cho [VRL-#1989](https://github.com/vectordotdev/vrl/issues/1989) (sửa lỗi UTF-8 char boundary trong lexer) và [VRL-#1615](https://github.com/vectordotdev/vrl/issues/1615) (guard cực trị cho duration).
 2. **Cô Lập & Giám Sát Cấp Độ Tiến Trình (Supervisor Isolation)**:
-   `raproxy` đóng vai trò là Process Supervisor (PID 1 trong container). Nếu một worker của Vector Core gặp panic hiếm gặp, Supervisor lập tức ghi nhận tín hiệu SIGCHLD, tự động tái sinh Vector Core trong chưa đầy 30ms mà không làm gián đoạn socket lắng nghe cổng 5000 của khách hàng.
+   `vector-gate` đóng vai trò là Process Supervisor (PID 1 trong container). Nếu một worker của Vector Core gặp panic hiếm gặp, Supervisor lập tức ghi nhận tín hiệu SIGCHLD, tự động tái sinh Vector Core trong chưa đầy 30ms mà không làm gián đoạn socket lắng nghe cổng 5000 của khách hàng.
 
 ---
 
@@ -141,11 +141,11 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
 - **Issues liên quan**: [VRL-#1824](https://github.com/vectordotdev/vrl/issues/1824), [VRL-#1119](https://github.com/vectordotdev/vrl/issues/1119) (`FailedToApplyFilter Error in parse_grok`), [VRL-#1021](https://github.com/vectordotdev/vrl/issues/1021) (`Optimize Bytes to String conversion in Value type`), [VRL-#106](https://github.com/vectordotdev/vrl/issues/106).
 - **Triệu chứng**: Sử dụng Regex/Grok pattern phức tạp trong VRL để đoán giao thức (ví dụ bóc Syslog, Beats, Splunk) tiêu tốn 80% chu kỳ CPU. Khi gặp log bất thường, hiện tượng Catastrophic Backtracking (ReDoS) khiến CPU đạt 100%, thông lượng tụt từ 50,000 EPS xuống dưới 2,000 EPS.
 
-#### 2. Trạng Thái Trên Vector Gate: **✅ BỨT PHÁ VƯỢT TRỘI (SOLVED BY RAPROXY TURBO-KERNEL)**
+#### 2. Trạng Thái Trên Vector Gate: **✅ BỨT PHÁ VƯỢT TRỘI (SOLVED BY VECTOR-GATE TURBO-KERNEL)**
 
 #### 3. Cơ Chế Xử Lý & Giải Pháp Kỹ Thuật:
 1. **Chuyển Phân Loại Giao Thức Lên Cấp Độ Kernel (Phase 0 Sniffing)**:
-   Thay vì đẩy dữ liệu thô vào VRL để chạy Regex, `raproxy` thực hiện **Sniffing 24 bytes đầu** của TCP stream:
+   Thay vì đẩy dữ liệu thô vào VRL để chạy Regex, `vector-gate` thực hiện **Sniffing 24 bytes đầu** của TCP stream:
    - Nhận diện byte nhị phân siêu tốc bằng slice so khớp nguyên bản (`&buf[0..2] == &[0x32, 0x44]`).
    - Hỗ trợ Base64 Magic Bytes & Offset với thời gian phán đoán chỉ **~19 micro-giây (µs)**.
 2. **Động Cơ Linux Kernel Zero-Copy `splice(2)`**:
@@ -192,9 +192,9 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
 1. **Cổng Đa Hình Đơn Nhất (`0.0.0.0:5000`) & Zero-Port Auto-Wiring**:
    - Mọi log đều đi chung qua duy nhất cổng 5000.
    - Định cấu hình `sources` bằng cú pháp tự nhiên: `address: "gates.<route_name>"`.
-   - `raproxy` tự động dò tìm và cấp phát các cổng nội bộ rảnh (`127.0.0.1:17500+`) bằng hàm `allocate_free_internal_port()`, loại trừ hoàn toàn rủi ro xung đột cổng (Port Collision).
+   - `vector-gate` tự động dò tìm và cấp phát các cổng nội bộ rảnh (`127.0.0.1:17500+`) bằng hàm `allocate_free_internal_port()`, loại trừ hoàn toàn rủi ro xung đột cổng (Port Collision).
 2. **Bộ Làm Sạch YAML Trong RAM (Bypass YAML Sanitizer)**:
-   Trước khi chuyển giao cấu hình cho Vector Core, `raproxy` tiến hành tiền xử lý trong bộ nhớ:
+   Trước khi chuyển giao cấu hình cho Vector Core, `vector-gate` tiến hành tiền xử lý trong bộ nhớ:
    - Transpile các khối `auto_remap` thành các `transforms` remap chuẩn của Vector.
    - Loại bỏ khối `gates:` ra khỏi file YAML tạm (`/tmp/.vector_runtime_*.yaml`).
    - Đảm bảo Vector Core không bao giờ gặp phải cú pháp lạ, kể cả khi chạy ở chế độ **Bypass Mode** (`gates.enabled: false`).
@@ -221,7 +221,7 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
    ```
    Toàn bộ lưu lượng không khớp bất kỳ chữ ký nào sẽ tự động được xả an toàn vào `blackhole_sink` nội bộ.
 2. **Kiểm Thử Khả Năng Chống Chịu Nghịch Đảo (Chaos Testing Suite)**:
-   Đã chạy kiểm thử 8 kịch bản tấn công khốc liệt (`raproxy/tests/chaos_test_suite.py`):
+   Đã chạy kiểm thử 8 kịch bản tấn công khốc liệt (`test/suites/test_chaos_resilience.py`):
    - Slowloris (treo byte chậm): Gate tự động ngắt kết nối sau timeout `inspect_timeout_ms: 200`.
    - Connection Storm (10,000 kết nối dồn dập): `SO_REUSEPORT` phân bổ đều trên 8 CPU cores, tỷ lệ rớt kết nối bằng $0\%$.
    - Fuzzing & Memory Bomb: Socket bị lỗi được ngắt sạch sẽ mà không rò rỉ bộ nhớ.
@@ -241,7 +241,7 @@ pie title Tỷ lệ Xử lý & Phòng vệ 641 Issues Upstream trên Vector Gate
 1. **Kiến Trúc Thư Mục Thả Nóng (Hot-Drop Directory)**:
    Vector Gate theo dõi thư mục `/etc/vector/vrl/` (hoặc thư mục tùy biến qua tham số `dir:` trong `auto_remap`).
 2. **Tiến Trình Giám Sát Nền (Background Watcher)**:
-   `raproxy` chạy một task nền bất đồng bộ quét thư mục mỗi 500ms. Khi quản trị viên thả thêm một file `.vrl` mới (ví dụ `syslog/04_paloalto_panos.vrl`):
+   `vector-gate` chạy một task nền bất đồng bộ quét thư mục mỗi 500ms. Khi quản trị viên thả thêm một file `.vrl` mới (ví dụ `syslog/04_paloalto_panos.vrl`):
    - Watcher phát hiện sự thay đổi.
    - Tự động tái tổng hợp chuỗi biến đổi VRL Onion.
    - Ghi ra cấu hình runtime mới và gửi tín hiệu `SIGHUP` tới Vector Core để nạp lại cấu hình mượt mà (Graceful Reload) mà không rớt bất kỳ kết nối TCP nào tại cổng 5000.
@@ -273,7 +273,7 @@ Dưới đây là bảng đối soát chi tiết các issue quan trọng nhất 
 | **#998** | `vrl` | Panic when `match_datadog_query` references hyphen | CLOSED | **✅ MITIGATED** | Kênh Datadog Intake được dẫn trực tiếp vào port 17507, tránh hàm lỗi. |
 | **#978** | `vrl` | Panic at `to_unix_timestamp format:nanoseconds` | CLOSED | **✅ FIXED** | Quy chuẩn toàn bộ hệ thống sử dụng đơn vị `milliseconds` / `seconds`. |
 | **#790** | `vrl` | `parse_timestamp` Invalid timestamp error | OPEN | **✅ RESOLVED** | Luôn bọc `parse_timestamp(...) ?? now()` đảm bảo không bao giờ drop log. |
-| **#18063**| `vector`| `parse_nginx_log` does not work for error logs | OPEN | **✅ RESOLVED** | Tách riêng parser access log và error log trong `docker_gate/vrl/payload/`. |
+| **#18063**| `vector`| `parse_nginx_log` does not work for error logs | OPEN | **✅ RESOLVED** | Tách riêng parser access log và error log trong `deploy/vrl/payload/`. |
 | **#17217**| `vector`| Unexpected panic in remap | OPEN | **✅ MITIGATED** | Process supervisor tự động hồi phục và Dead-Letter Queue hứng log lỗi. |
 | **#17082**| `vector`| Assigning compact to root quietly fails | OPEN | **✅ RESOLVED** | Gán vào biến trung gian trước khi gán lại vào root object. |
 | **#16874**| `vector`| Add guard for limit in `split()` fn | CLOSED | **✅ FIXED** | Đã tích hợp bản vá kiểm tra giá trị limit dương trong Vector Core. |

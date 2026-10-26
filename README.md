@@ -179,7 +179,7 @@ s.close()
 "
 
 # 4. Xem kết quả đã ghi vào file
-tail -n 5 /home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson
+tail -n 5 /home/manager/vectormod/deploy/output/forwarded_logs.ndjson
 ```
 
 ---

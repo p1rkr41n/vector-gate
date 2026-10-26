@@ -38,6 +38,11 @@ SUITES = {
         "desc": "Beats Sliding Window, Flaky Drop Churn & P0-P2 Risk Remediation",
         "requires_gate": True
     },
+    "chaos_beats_100": {
+        "file": "chaos_beats_100_flaky_nodes.py",
+        "desc": "100-Node Beats Chaos Simulation (Silent Drops, Resend Churn, Dedupe)",
+        "requires_gate": True
+    },
     "deep_e2e": {
         "file": "test_deep_e2e_verification.py",
         "desc": "Deep End-to-End Declarative Routing & Zero-Port Auto-Wiring",

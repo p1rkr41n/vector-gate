@@ -141,8 +141,8 @@ docker run -d \
   --name vector-smart-gate \
   --restart unless-stopped \
   -p 5000:5000 \
-  -v $(pwd)/docker_gate/config/vector.yaml:/etc/vector/vector.yaml:ro \
-  -v $(pwd)/docker_gate/output:/var/log/vector \
+  -v $(pwd)/deploy/config/vector.yaml:/etc/vector/vector.yaml:ro \
+  -v $(pwd)/deploy/output:/var/log/vector \
   l1ghtg3m/vector-gate:2.2.0
 ```
 
@@ -183,10 +183,10 @@ docker compose logs -f
 Nếu bạn chạy trên máy chủ Bare-metal hoặc VM Linux:
 ```bash
 # Kiểm tra tính hợp lệ của cấu hình
-./raproxy/target/release/vector-gate validate -c /path/to/vector.yaml
+vector-gate/target/release/vector-gate validate -c /path/to/vector.yaml
 
 # Khởi chạy Gate kiêm Vector Supervisor
-./raproxy/target/release/vector-gate run -c /path/to/vector.yaml
+vector-gate/target/release/vector-gate run -c /path/to/vector.yaml
 ```
 
 ---
@@ -246,7 +246,7 @@ sinks:
 ---
 
 ### 4.2. Cấu hình mẫu đầy đủ chuẩn Production
-*(Trích từ cấu hình chuẩn `docker_gate/config/vector.yaml` hỗ trợ toàn diện 15 giao thức và 3 quy tắc tùy biến)*
+*(Trích từ cấu hình chuẩn `deploy/config/vector.yaml` hỗ trợ toàn diện 15 giao thức và 3 quy tắc tùy biến)*
 
 ```yaml
 data_dir: "/var/lib/vector"
@@ -639,7 +639,7 @@ Tất cả các lệnh kiểm thử dưới đây đều gửi trực tiếp và
 
 * **Kiểm chứng dữ liệu đã lưu vào đĩa:**
   ```bash
-  tail -n 10 /home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson
+  tail -n 10 /home/manager/vectormod/deploy/output/forwarded_logs.ndjson
   ```
 
 ---

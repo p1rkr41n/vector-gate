@@ -53,7 +53,7 @@ total_sent = sum(r[0] for r in results)
 eps = total_sent / total_elapsed if total_elapsed > 0 else 0
 
 print("=" * 70)
-print(f"⚡ KẾT QUẢ KIỂM THỬ TẢI CỰC HẠN (ST-01 RAPROXY TURBO-KERNEL)")
+print(f"⚡ KẾT QUẢ KIỂM THỬ TẢI CỰC HẠN (ST-01 VECTOR-GATE TURBO-KERNEL)")
 print("=" * 70)
 print(f"• Tổng số sự kiện gửi đi       : {total_sent:,} events")
 print(f"• Tổng thời gian xử lý         : {total_elapsed:.4f} giây")

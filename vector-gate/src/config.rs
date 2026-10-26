@@ -567,6 +567,7 @@ impl GateConfig {
 #[derive(Debug, Clone)]
 pub struct VrlPlugin {
     pub name: String,              // e.g. "syslog/01_fortigate.vrl"
+    #[allow(dead_code)]
     pub filename: String,          // e.g. "01_fortigate.vrl"
     pub scope: String,             // "syslog", "http", "payload", "all"
     pub priority: i32,

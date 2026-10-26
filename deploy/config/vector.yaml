@@ -371,7 +371,7 @@ sinks:
       max_size: 10737418240 # 10GB disk buffer
       when_full: block
 
-  # Blackhole Sink cho unmatched traffic
+  # Blackhole Sink cho unmatched traffic & unconsumed telemetry streams
   blackhole_sink:
     type: blackhole
-    inputs: ["tag_other_unmatched"]
+    inputs: ["tag_other_unmatched", "in_opentelemetry.metrics", "in_opentelemetry.traces"]

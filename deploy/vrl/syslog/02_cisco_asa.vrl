@@ -7,7 +7,7 @@
 if contains(string!(.message), "%ASA-") {
     parsed, err = parse_regex(.message, r'^.*?%ASA-(?P<severity>\d)-(?P<msg_id>\d+):\s+(?P<action>\w+)\s+(?P<direction>\w+)\s+TCP connection\s+(?P<conn_id>\d+)\s+for\s+(?P<src_if>[\w/]+):(?P<src_ip>[0-9.]+)/(?P<src_port>\d+).*$')
     if err == null {
-        . = merge!(., parsed)
+        . = merge(., parsed)
         .parsed = true
         .vendor = "Cisco"
     }
