@@ -15,13 +15,49 @@ pub const MAX_PIPE_PAGES: usize = 64;
 /// Maximum pipe capacity in bytes (262,144 bytes)
 pub const MAX_PIPE_CAPACITY: usize = MAX_PIPE_PAGES * PAGE_SIZE;
 
-/// Idle connection timeout for splice operations (30 seconds)
+/// Idle connection timeout for splice operations (30 seconds default)
 pub const SPLICE_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Graceful flush timeout for pending Lumberjack ACKs during half-close (5 seconds)
 pub const FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Read TCP connection Round-Trip-Time (RTT) via Linux kernel TCP_INFO
+#[cfg(target_os = "linux")]
+pub fn get_tcp_rtt_ms(fd: libc::c_int) -> Option<u32> {
+    unsafe {
+        let mut info: libc::tcp_info = std::mem::zeroed();
+        let mut len = std::mem::size_of::<libc::tcp_info>() as libc::socklen_t;
+        let ret = libc::getsockopt(
+            fd,
+            libc::IPPROTO_TCP,
+            libc::TCP_INFO,
+            &mut info as *mut _ as *mut libc::c_void,
+            &mut len,
+        );
+        if ret == 0 {
+            Some(info.tcpi_rtt / 1000)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn get_tcp_rtt_ms(_fd: libc::c_int) -> Option<u32> {
+    None
+}
+
+/// Compute adaptive timeout based on live TCP RTT
+pub fn compute_adaptive_timeout(fd: libc::c_int, default_timeout: Duration) -> Duration {
+    if let Some(rtt_ms) = get_tcp_rtt_ms(fd) {
+        let adaptive_ms = (rtt_ms as u64 * 4 + 5000).clamp(5000, 60000);
+        Duration::from_millis(adaptive_ms)
+    } else {
+        default_timeout
+    }
+}
+
 /// RAproxy Kernel Pipe for Zero-Copy Splice Operations
-/// Supports manual page threshold configuration (1-64 pages) and dynamic elastic resizing.
+/// Supports manual page threshold configuration (1-64 pages) and dynamic bidirectional elastic resizing.
 pub struct KernelPipe {
     pub read_fd: libc::c_int,
     pub write_fd: libc::c_int,
@@ -123,12 +159,14 @@ pub async fn splice_direction_stream<'a>(
     let src_fd = src_stream.as_raw_fd();
     let dst_fd = dst_stream.as_raw_fd();
 
+    let timeout_duration = compute_adaptive_timeout(src_fd, SPLICE_IDLE_TIMEOUT);
+
     loop {
         let pipe_w = pipe.write_fd;
         let cur_cap = pipe.capacity.load(Ordering::Relaxed);
 
         let n = match tokio::time::timeout(
-            SPLICE_IDLE_TIMEOUT,
+            timeout_duration,
             src_stream.async_io(Interest::READABLE, || {
                 let res = unsafe {
                     libc::splice(
@@ -164,10 +202,19 @@ pub async fn splice_direction_stream<'a>(
             return Ok(());
         }
 
-        // Adaptive Elastic Expansion: If pipe is saturated by incoming burst, double capacity up to MAX_PIPE_CAPACITY (256KB)
+        // 1. Adaptive Elastic Expansion: If pipe is saturated by incoming burst, expand capacity up to MAX_PIPE_CAPACITY (256KB)
         if pipe.adaptive && n as usize == cur_cap && cur_cap < MAX_PIPE_CAPACITY {
             let next_target = (cur_cap * 2).min(MAX_PIPE_CAPACITY);
             let ret = unsafe { libc::fcntl(pipe_w, libc::F_SETPIPE_SZ, next_target as libc::c_int) };
+            if ret > 0 {
+                pipe.capacity.store(ret as usize, Ordering::Relaxed);
+            }
+        }
+        // 2. Bidirectional Pipe Shrinking: If traffic burst recedes (< 32KB), shrink pipe back to baseline (64KB)
+        // to immediately release kernel page frames and eliminate memory bloat across idle connections.
+        else if pipe.adaptive && cur_cap > DEFAULT_PIPE_PAGES * PAGE_SIZE && (n as usize) <= (DEFAULT_PIPE_PAGES * PAGE_SIZE) / 2 {
+            let baseline = DEFAULT_PIPE_PAGES * PAGE_SIZE;
+            let ret = unsafe { libc::fcntl(pipe_w, libc::F_SETPIPE_SZ, baseline as libc::c_int) };
             if ret > 0 {
                 pipe.capacity.store(ret as usize, Ordering::Relaxed);
             }

@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: l1ghtg3m/vector-gate:2.5.5
+    image: l1ghtg3m/vector-gate:2.5.6
     container_name: vector-smart-gate
     restart: unless-stopped
     stop_signal: SIGTERM
