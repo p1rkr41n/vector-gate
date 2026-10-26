@@ -18,7 +18,6 @@ Toàn bộ các bài kiểm thử tự động (Python QA scripts, Shell test ru
 | **[`bench_gate_vs_vector.py`](bench_gate_vs_vector.py)** | **Performance Benchmark** | Đo độ trễ nano-giây so sánh Hop A (Client -> Gate) vs Hop B (Gate -> Vector Core) | Cần môi trường Linux |
 | **[`test_universal_vrl_hot_drop.py`](test_universal_vrl_hot_drop.py)** | **Hot-Drop Watcher** | Kiểm tra watcher phát hiện file mới và re-synthesize YAML động | Độc lập |
 | **[`runner.sh`](runner.sh)** | **Shell Test Runner** | Trình kiểm thử pipeline Vector chuẩn qua bash script | Bash / Linux |
-| **[`ingress/`](ingress/)** | **Ingress Test Benchmarks** | Tài nguyên và công cụ đo đối chuẩn Ingress đa kênh | Linux |
 
 ---
 

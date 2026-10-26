@@ -1,25 +1,25 @@
 # ==============================================================================
-# STAGE 1: Build Vector Smart Gate Engine (raproxy) from Rust source
+# STAGE 1: Build Vector Smart Gate Engine from Rust source
 # ==============================================================================
 FROM rust:slim AS builder
 
 WORKDIR /usr/src/vector-gate
 
 # Copy manifests
-COPY raproxy/Cargo.toml raproxy/Cargo.lock ./
+COPY vector-gate/Cargo.toml vector-gate/Cargo.lock* ./
 
 # Pre-build dependencies for caching
 RUN mkdir -p src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
-    rm -rf src target/release/raproxy target/release/deps/raproxy*
+    rm -rf src target/release/vector-gate target/release/deps/vector_gate*
 
 # Copy real source code and build optimized release binary
-COPY raproxy/src ./src
+COPY vector-gate/src ./src
 RUN touch src/*.rs && \
     cargo build --release && \
-    strip target/release/raproxy && \
-    cp target/release/raproxy /usr/local/bin/vector-gate
+    strip target/release/vector-gate && \
+    cp target/release/vector-gate /usr/local/bin/vector-gate
 
 # ==============================================================================
 # STAGE 2: Production Vector Smart Gate Runtime Container

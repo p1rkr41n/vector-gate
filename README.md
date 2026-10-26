@@ -62,7 +62,7 @@ Dự án được phân tách nghiêm ngặt, rành mạch và loại bỏ hoàn
 vector-gate/
 ├── docker_gate/      # Toàn bộ hạ tầng container (Dockerfile, docker-compose.yml, config/vector.yaml, vrl/)
 ├── docs/             # Toàn bộ hồ sơ tài liệu kỹ thuật (MASTER_SPECIFICATION, USER_GUIDE, QA, VRL Audits)
-├── raproxy/          # Mã nguồn cốt lõi (Rust Ingress Daemon, Zero-Copy Splice Engine, Magic Recognizer)
+├── vector-gate/      # Mã nguồn cốt lõi (Rust Ingress Daemon, Zero-Copy Splice Engine, Magic Recognizer)
 ├── raw_data/         # Dữ liệu phân tích thô & Thư mục samples/ (15 giao thức mẫu + script test)
 │   └── samples/      # Tập con dữ liệu mẫu chuẩn (samples.json, send_samples.py, catalog tra cứu)
 ├── test/             # Toàn bộ bài kiểm thử tự động (Python QA, Chaos, Stress, Matrix, Shell runner) & Ingress
