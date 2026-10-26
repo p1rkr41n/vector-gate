@@ -1,0 +1,92 @@
+{
+  "01_syslog_rfc3164": {
+    "protocol": "Syslog RFC 3164 (BSD)",
+    "channel": "syslog",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< \"<134>Oct 24 10:15:30 srv-app-01 sshd[28491]: Accepted publickey for manager from 192.168.1.100 port 54322 ssh2\"",
+    "payload": "<134>Oct 24 10:15:30 srv-app-01 sshd[28491]: Accepted publickey for manager from 192.168.1.100 port 54322 ssh2\n"
+  },
+  "02_syslog_rfc5424": {
+    "protocol": "Syslog RFC 5424 (IETF)",
+    "channel": "syslog",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< '<165>1 2026-10-24T10:15:30.123Z srv-app-01 myapp 28491 ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"AppAuth\" eventID=\"1011\"] User authentication succeeded'",
+    "payload": "<165>1 2026-10-24T10:15:30.123Z srv-app-01 myapp 28491 ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"AppAuth\" eventID=\"1011\"] User authentication succeeded\n"
+  },
+  "03_cef_checkpoint": {
+    "protocol": "Check Point / Palo Alto CEF",
+    "channel": "syslog",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< \"<134>Oct 24 10:15:31 fw-checkpoint-01 CEF:0|Check Point|VPN-1 & FireWall-1|Check Point|Log|drop|act=drop src=203.0.113.45 dst=10.0.0.15 proto=6 spt=44123 dpt=22 cs1Label=Rule cs1=Stealth_Drop\"",
+    "payload": "<134>Oct 24 10:15:31 fw-checkpoint-01 CEF:0|Check Point|VPN-1 & FireWall-1|Check Point|Log|drop|act=drop src=203.0.113.45 dst=10.0.0.15 proto=6 spt=44123 dpt=22 cs1Label=Rule cs1=Stealth_Drop\n"
+  },
+  "04_fortigate_kv": {
+    "protocol": "Fortinet FortiGate Key-Value",
+    "channel": "syslog",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< '<189>date=2026-10-24 time=10:15:32 devname=\"FGT60D-MAIN\" devid=\"FGT60D12345678\" type=\"traffic\" subtype=\"forward\" level=\"notice\" action=\"accept\" srcip=192.168.1.50 dstip=8.8.8.8 srcport=51234 dstport=53 proto=17 policyid=1 service=\"DNS\"'",
+    "payload": "<189>date=2026-10-24 time=10:15:32 devname=\"FGT60D-MAIN\" devid=\"FGT60D12345678\" type=\"traffic\" subtype=\"forward\" level=\"notice\" action=\"accept\" srcip=192.168.1.50 dstip=8.8.8.8 srcport=51234 dstport=53 proto=17 policyid=1 service=\"DNS\"\n"
+  },
+  "05_cisco_asa": {
+    "protocol": "Cisco ASA Firewall",
+    "channel": "syslog",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< \"<166>%ASA-6-302013: Built outbound TCP connection 987654 for outside:198.51.100.20/443 (198.51.100.20/443) to inside:192.168.1.25/49152 (192.168.1.25/49152)\"",
+    "payload": "<166>%ASA-6-302013: Built outbound TCP connection 987654 for outside:198.51.100.20/443 (198.51.100.20/443) to inside:192.168.1.25/49152 (192.168.1.25/49152)\n"
+  },
+  "06_linux_auditd": {
+    "protocol": "Linux Kernel Auditd",
+    "channel": "socket",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< 'type=SYSCALL msg=audit(1729764932.456:108): arch=c000003e syscall=59 success=yes exit=0 a0=7ffd123 a1=7ffd456 a2=7ffd789 items=2 ppid=1374 pid=28500 auid=1000 uid=0 gid=0 euid=0 exe=\"/usr/bin/cat\" comm=\"cat\"'",
+    "payload": "type=SYSCALL msg=audit(1729764932.456:108): arch=c000003e syscall=59 success=yes exit=0 a0=7ffd123 a1=7ffd456 a2=7ffd789 items=2 ppid=1374 pid=28500 auid=1000 uid=0 gid=0 euid=0 exe=\"/usr/bin/cat\" comm=\"cat\"\n"
+  },
+  "07_suricata_eve": {
+    "protocol": "Suricata IDS Alert EVE JSON",
+    "channel": "socket",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< '{\"timestamp\":\"2026-10-24T10:15:33Z\",\"event_type\":\"alert\",\"src_ip\":\"198.51.100.55\",\"src_port\":44321,\"dest_ip\":\"192.168.1.10\",\"dest_port\":80,\"proto\":\"TCP\",\"alert\":{\"action\":\"allowed\",\"signature\":\"Potential SSH Scan\"}}'",
+    "payload": "{\"timestamp\":\"2026-10-24T10:15:33Z\",\"event_type\":\"alert\",\"src_ip\":\"198.51.100.55\",\"src_port\":44321,\"dest_ip\":\"192.168.1.10\",\"dest_port\":80,\"proto\":\"TCP\",\"alert\":{\"action\":\"allowed\",\"signature\":\"Potential SSH Scan\"}}\n"
+  },
+  "08_zeek_conn": {
+    "protocol": "Zeek Network Connection JSON",
+    "channel": "socket",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< '{\"ts\":1729764933.123,\"uid\":\"C9k2841XyZ\",\"id.orig_h\":\"192.168.1.50\",\"id.orig_p\":52341,\"id.resp_h\":\"142.250.190.46\",\"id.resp_p\":443,\"proto\":\"tcp\",\"service\":\"ssl\",\"conn_state\":\"SF\"}'",
+    "payload": "{\"ts\":1729764933.123,\"uid\":\"C9k2841XyZ\",\"id.orig_h\":\"192.168.1.50\",\"id.orig_p\":52341,\"id.resp_h\":\"142.250.190.46\",\"id.resp_p\":443,\"proto\":\"tcp\",\"service\":\"ssl\",\"conn_state\":\"SF\"}\n"
+  },
+  "09_nginx_access": {
+    "protocol": "Nginx Combined Access Log",
+    "channel": "socket",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< '192.168.1.100 - admin [24/Oct/2026:10:15:34 +0000] \"GET /api/v1/status HTTP/1.1\" 200 1245 \"https://dashboard.internal/\" \"Mozilla/5.0\"'",
+    "payload": "192.168.1.100 - admin [24/Oct/2026:10:15:34 +0000] \"GET /api/v1/status HTTP/1.1\" 200 1245 \"https://dashboard.internal/\" \"Mozilla/5.0\"\n"
+  },
+  "10_generic_http_json": {
+    "protocol": "Generic HTTP Webhook JSON",
+    "channel": "http_server",
+    "test_command": "curl -s -X POST http://127.0.0.1:5000/ -H \"Content-Type: application/json\" -d '{\"timestamp\":\"2026-10-24T10:15:35Z\",\"app\":\"checkout\",\"level\":\"warn\",\"message\":\"Database query latency exceeds SLA\"}'",
+    "payload": "{\"timestamp\":\"2026-10-24T10:15:35Z\",\"app\":\"checkout\",\"level\":\"warn\",\"message\":\"Database query latency exceeds SLA\"}"
+  },
+  "11_splunk_hec": {
+    "protocol": "Splunk HEC JSON",
+    "channel": "splunk_hec",
+    "test_command": "curl -s -X POST http://127.0.0.1:5000/services/collector/event -H \"Authorization: Splunk dummy-token\" -H \"Content-Type: application/json\" -d '{\"time\":1729764936,\"event\":{\"action\":\"blocked\",\"ip\":\"203.0.113.19\"}}'",
+    "payload": "{\"time\":1729764936,\"host\":\"splunk-forwarder-01\",\"source\":\"kube:nginx\",\"event\":{\"action\":\"blocked\",\"client_ip\":\"203.0.113.19\"}}"
+  },
+  "12_datadog_intake": {
+    "protocol": "Datadog Agent Log Intake",
+    "channel": "datadog_agent",
+    "test_command": "curl -s -X POST http://127.0.0.1:5000/v1/input -H \"DD-API-KEY: dummy-key\" -H \"Content-Type: application/json\" -d '[{\"message\":\"Payment OK\",\"status\":\"info\"}]'",
+    "payload": "[{\"message\":\"Payment OK\",\"status\":\"info\",\"hostname\":\"pay-01\",\"service\":\"pay-api\"}]"
+  },
+  "13_beats_lumberjack": {
+    "protocol": "Elastic Beats Lumberjack v2",
+    "channel": "logstash",
+    "test_command": "python3 samples/send_samples.py --protocol beats",
+    "payload": "{\"@timestamp\":\"2026-10-24T10:15:37Z\",\"agent\":{\"type\":\"filebeat\"},\"message\":\"Session OK\"}"
+  },
+  "14_fluent_forward": {
+    "protocol": "Fluentd MessagePack Forward",
+    "channel": "fluent",
+    "test_command": "python3 samples/send_samples.py --protocol fluent",
+    "payload": "{\"tag\":\"app.container\",\"timestamp\":1729764938,\"record\":{\"log\":\"Redis OK\"}}"
+  },
+  "15_raw_socket": {
+    "protocol": "Raw Custom Socket Stream",
+    "channel": "socket",
+    "test_command": "nc -w 1 127.0.0.1 5000 <<< \"CUSTOM_APP_STREAM: transaction_id=TXN-90218 status=SUCCESS latency_ms=12\"",
+    "payload": "CUSTOM_APP_STREAM: transaction_id=TXN-90218 status=SUCCESS latency_ms=12\n"
+  }
+}
