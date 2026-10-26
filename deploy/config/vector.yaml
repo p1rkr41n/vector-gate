@@ -129,7 +129,7 @@ sources:
   in_beats:
     type: logstash
     address: "gates.beats_gate"
-    receive_buffer_bytes: 1048576
+    receive_buffer_bytes: 4194304
     acknowledgements: false
 
   in_fluent:
@@ -233,9 +233,15 @@ transforms:
       .source_id = "in_syslog"
       .ingress_port = 5000
 
+  dedupe_beats:
+    type: dedupe
+    inputs: ["in_beats"]
+    fields:
+      match: ["host", "message"]
+
   tag_beats:
     type: remap
-    inputs: ["in_beats"]
+    inputs: ["dedupe_beats"]
     source: |
       .type_log = "beats_lumberjack"
       .source_id = "in_beats"
