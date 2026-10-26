@@ -16,7 +16,7 @@ import uuid
 
 HOST = "127.0.0.1"
 PORT = 5000
-OUTPUT_FILE = "/home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson"
+OUTPUT_FILE = "/home/manager/vectormod/deploy/output/forwarded_logs.ndjson"
 
 class Colors:
     GREEN = "\033[92m"

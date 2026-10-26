@@ -1,4 +1,6 @@
+research/
 raw_data/
+trash/
 .git
 .agents
 target/
@@ -14,8 +16,10 @@ vector-portable/
 *.tar.gz
 *.log
 *.ndjson
+*.jsonl
 test/
+docs/
 inbox_history.jsonl
 tele_offset.txt
-docker_gate/output/
-docker_gate/bin/
+deploy/output/
+deploy/bin/

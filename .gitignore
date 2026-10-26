@@ -20,13 +20,9 @@ target/
 Cargo.lock
 
 # Test outputs & logs
-smart_ingress/output/
-test/ingress/output/
-test/ingress/logs/
-test/ingress/data/
+deploy/output/
+deploy/bin/
 test/bin/
-docker_gate/bin/
-docker_gate/output/
 *.log
 *.ndjson
 *.jsonl

@@ -15,10 +15,11 @@ import tempfile
 import time
 
 VECTOR_BIN = "/usr/local/bin/vector"
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-GATE_BIN = os.path.join(TEST_DIR, "bin", "vector-gate")
+SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_ROOT = os.path.dirname(SUITE_DIR)
+GATE_BIN = os.path.join(TEST_ROOT, "bin", "vector-gate")
 if not os.path.exists(GATE_BIN):
-    GATE_BIN = "/home/manager/vectormod/vector-gate/target/release/vector-gate"
+    GATE_BIN = os.path.join(TEST_ROOT, "..", "vector-gate", "target", "release", "vector-gate")
 WORKDIR = "/tmp/test_vector_matrix"
 
 def setup():

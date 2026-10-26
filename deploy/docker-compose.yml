@@ -4,7 +4,7 @@ services:
   vector-gate:
     build:
       context: ..
-      dockerfile: docker_gate/Dockerfile
+      dockerfile: deploy/Dockerfile
     image: l1ghtg3m/vector-gate:2.4.3
     container_name: vector-smart-gate
     restart: unless-stopped

@@ -21,7 +21,7 @@ import urllib.request
 GATE_HOST = "127.0.0.1"
 GATE_PORT = 5000
 FORWARDED_LOGS = "/var/log/vector/forwarded_logs.ndjson"
-VRL_DIR = "/home/manager/vectormod/docker_gate/vrl"
+VRL_DIR = "/home/manager/vectormod/deploy/vrl"
 
 def run_docker_exec(cmd: str) -> str:
     res = subprocess.run(f"docker exec vector-smart-gate {cmd}", shell=True, capture_output=True, text=True)

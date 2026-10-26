@@ -16,7 +16,7 @@ import urllib.request
 
 GATE_IP = "127.0.0.1"
 GATE_PORT = 5000
-OUTPUT_FILE = "/home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson"
+OUTPUT_FILE = "/home/manager/vectormod/deploy/output/forwarded_logs.ndjson"
 
 def get_output_line_count():
     if not os.path.exists(OUTPUT_FILE):

@@ -46,14 +46,15 @@ SUITES = {
 }
 
 def run_suite(name: str, info: dict) -> bool:
-    fpath = os.path.join(TESTS_DIR, info["file"])
+    suites_dir = os.path.join(TESTS_DIR, "suites")
+    fpath = os.path.join(suites_dir, info["file"])
     print("\n" + "=" * 70)
     print(f"🧪 RUNNING SUITE: [{name.upper()}] - {info['desc']}")
-    print(f"📁 Target script: {info['file']}")
+    print(f"📁 Target script: suites/{info['file']}")
     print("=" * 70)
 
     start = time.time()
-    res = subprocess.run([sys.executable, fpath], cwd=TESTS_DIR)
+    res = subprocess.run([sys.executable, fpath], cwd=suites_dir)
     dur = time.time() - start
 
     if res.returncode == 0:

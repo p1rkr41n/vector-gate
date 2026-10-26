@@ -15,7 +15,7 @@ import sys
 
 GATE_PORT = 5000
 HOST = "127.0.0.1"
-OUTPUT_FILE = "/home/manager/vectormod/docker_gate/output/forwarded_logs.ndjson"
+OUTPUT_FILE = "/home/manager/vectormod/deploy/output/forwarded_logs.ndjson"
 
 SYSLOG_SAMPLE = b"<134>1 2026-10-24T17:07:00Z firewall-gw kernel - - [audit@32473 action=\"ALLOW\"] Connection accepted src=192.168.1.10 dst=10.0.0.5 proto=TCP spt=49152 dpt=443\n"
 

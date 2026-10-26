@@ -14,10 +14,11 @@ import sys
 import tempfile
 import time
 
-TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-BINARY_PATH = os.path.join(TEST_DIR, "bin", "vector-gate")
+SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_ROOT = os.path.dirname(SUITE_DIR)
+BINARY_PATH = os.path.join(TEST_ROOT, "bin", "vector-gate")
 if not os.path.exists(BINARY_PATH):
-    BINARY_PATH = "/home/manager/vectormod/vector-gate/target/release/vector-gate"
+    BINARY_PATH = os.path.join(TEST_ROOT, "..", "vector-gate", "target", "release", "vector-gate")
 TEST_TMP_DIR = "/tmp/vector_standard_qa"
 
 def setup_env():

@@ -42,14 +42,14 @@ COPY --from=builder /usr/local/bin/vector-gate /usr/local/bin/vector-gate
 RUN chmod +x /usr/local/bin/vector-gate
 
 # Copy unified Vector configuration
-COPY docker_gate/config/vector.yaml /etc/vector/vector.yaml
+COPY deploy/config/vector.yaml /etc/vector/vector.yaml
 
 # Create directory structure for vector logs, vrl plugins, and state
 RUN mkdir -p /var/log/vector /var/lib/vector /etc/vector/vrl /tmp && \
     chmod 777 /var/log/vector /var/lib/vector /etc/vector/vrl /tmp
 
 # Copy default hierarchical VRL plugins
-COPY docker_gate/vrl/ /etc/vector/vrl/
+COPY deploy/vrl/ /etc/vector/vrl/
 RUN chmod -R 777 /etc/vector/vrl
 
 # Expose the polymorphic ingress port
