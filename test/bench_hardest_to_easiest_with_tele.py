@@ -198,6 +198,10 @@ def main():
             })
         else:
             print(f"  {Colors.RED}{Colors.BOLD}✘ FAIL{Colors.RESET} in {duration:.2f}s | {item['id']} (code {proc.returncode})")
+            if proc.stdout:
+                print(f"  [STDOUT]:\n{proc.stdout[-800:]}")
+            if proc.stderr:
+                print(f"  [STDERR]:\n{proc.stderr[-800:]}")
             results.append({
                 "item": item,
                 "passed": False,
@@ -206,6 +210,8 @@ def main():
             })
             # GỬI QUA TELEGRAM NGAY LẬP TỨC (KHÔNG CHỜ PHẢN HỒI)
             send_telegram_alert(item, proc.stdout, proc.stderr, proc.returncode)
+
+        time.sleep(1.0) # Cho phép buffer I/O lắng xuống giữa các cấp độ test
 
     total_time = time.perf_counter() - overall_start
 

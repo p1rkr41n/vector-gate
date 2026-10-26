@@ -15,6 +15,7 @@ services:
     environment:
       - RUST_LOG=info
       - VECTOR_LOG=info
+      - MALLOC_CONF=dirty_decay_ms:0,muzzy_decay_ms:0
     volumes:
       - ./config/vector.yaml:/etc/vector/vector.yaml:ro
       - ./vrl:/etc/vector/vrl

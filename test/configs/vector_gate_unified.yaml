@@ -325,20 +325,26 @@ transforms:
       .source_id = "in_http"
       .ingress_port = 5000
 
-  tag_other_unmatched:
+  fallback_other_unmatched:
     type: remap
     inputs: ["other_unmatched"]
     source: |
       .type_log = "other_unmatched"
       .source_id = "other_unmatched"
       .ingress_port = 5000
+      ._parse_status = "unmatched"
+      .parsed = false
+      .parser_status = "UNPARSED_RAW"
+      if length(string(.message) ?? "") > 65536 {
+        .message = truncate(string!(.message), 65536)
+      }
 
 # PHASE 3: SINKS
 sinks:
   # Primary Data File Sink: Ghi toàn bộ các log có trường type_log
   file_output:
     type: file
-    inputs: ["tag_*"]
+    inputs: ["tag_*", "fallback_other_unmatched"]
     path: "/var/log/vector/forwarded_logs.ndjson"
     encoding:
       codec: json
@@ -346,4 +352,4 @@ sinks:
   # Blackhole Sink cho unmatched traffic
   blackhole_sink:
     type: blackhole
-    inputs: ["tag_other_unmatched", "in_opentelemetry.metrics", "in_opentelemetry.traces"]
+    inputs: ["fallback_other_unmatched", "in_opentelemetry.metrics", "in_opentelemetry.traces"]
