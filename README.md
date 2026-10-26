@@ -59,8 +59,9 @@ make test
 
 ## 📋 TÀI LIỆU HƯỚNG DẪN CHI TIẾT
 * 📖 [**USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
-* 🏗️ [**BA_ZERO_PORT_AUTO_WIRING.md**](BA_ZERO_PORT_AUTO_WIRING.md): Đặc tả phân tích nghiệp vụ kiến trúc Zero-Port Auto-Wiring & Cầu chì `gates.other`.
-* 🧪 [**QA_REPORT_v2_2_ZERO_PORT_E2E.md**](QA_REPORT_v2_2_ZERO_PORT_E2E.md): Báo cáo nghiệm thu kiểm thử chuyên sâu 27/27 kịch bản (100% PASS).
+* 📚 [**docs/MASTER_SPECIFICATION.md** (Hồ sơ Thiết kế Kỹ thuật & Báo cáo Nghiệm thu Master)](docs/MASTER_SPECIFICATION.md): Tài liệu tổng hợp toàn diện bao gồm toàn bộ Phân tích nghiệp vụ (BA) và Nghiệm thu chất lượng (QA) của toàn hệ thống Vector Gate.
+* 🏗️ [**docs/BA_MASTER_SPECIFICATION.md**](docs/BA_MASTER_SPECIFICATION.md): Đặc tả phân tích nghiệp vụ hợp nhất 9 chương kiến trúc (Zero-Port, Turbo-Kernel, Onion VRL, Custom Rules...).
+* 🧪 [**docs/QA_MASTER_REPORT.md**](docs/QA_MASTER_REPORT.md): Báo cáo nghiệm thu chất lượng hợp nhất toàn bộ các bộ test suites (100% PASS).
 
 ---
 
