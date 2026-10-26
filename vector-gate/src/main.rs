@@ -1,11 +1,12 @@
 use std::env;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::signal::unix::{signal, SignalKind};
 
 mod config;
 mod splice;
@@ -282,12 +283,44 @@ fn create_reuseport_listener(addr: SocketAddr, cfg: &RuntimeConfig) -> std::io::
     TcpListener::from_std(std_listener)
 }
 
+/// Configure TCP socket with aggressive Keepalive and RFC 5482 TCP_USER_TIMEOUT
+/// to immediately detect dead network connections and prevent ghost connections.
+fn configure_robust_socket(stream: &tokio::net::TcpStream) {
+    use std::os::unix::io::AsRawFd;
+    let fd = stream.as_raw_fd();
+    if fd < 0 {
+        return;
+    }
+    let sock = socket2::SockRef::from(stream);
+
+    // 1. SO_KEEPALIVE = true & TCP Keepalive: 10s idle, 5s interval
+    let _ = sock.set_keepalive(true);
+    let keepalive = socket2::TcpKeepalive::new()
+        .with_time(Duration::from_secs(10))
+        .with_interval(Duration::from_secs(5));
+    let _ = sock.set_tcp_keepalive(&keepalive);
+
+    // 2. TCP_USER_TIMEOUT = 15000 (15 seconds) via setsockopt
+    #[cfg(target_os = "linux")]
+    unsafe {
+        let timeout_ms: libc::c_uint = 15000;
+        libc::setsockopt(
+            fd,
+            libc::IPPROTO_TCP,
+            libc::TCP_USER_TIMEOUT,
+            &timeout_ms as *const _ as *const libc::c_void,
+            std::mem::size_of_val(&timeout_ms) as libc::socklen_t,
+        );
+    }
+}
+
 async fn handle_connection(
     mut client_stream: TcpStream,
     peer_addr: SocketAddr,
     config: Arc<RuntimeConfig>,
     stats: Arc<Stats>,
 ) {
+    configure_robust_socket(&client_stream);
     if config.tcp_nodelay {
         let _ = client_stream.set_nodelay(true);
     }
@@ -334,6 +367,7 @@ async fn handle_connection(
             return;
         }
     };
+    configure_robust_socket(&backend_stream);
     if config.tcp_nodelay {
         let _ = backend_stream.set_nodelay(true);
     }
@@ -347,50 +381,71 @@ async fn handle_connection(
 
     // High performance Zero-Copy Linux splice(2) with graceful user-space fallback
     if config.zero_copy {
-        if let Err(_) = splice::zero_copy_splice_bidirectional(
+        match splice::zero_copy_splice_bidirectional(
             &mut client_stream,
             &mut backend_stream,
             config.pipe_buffer,
             config.pipe_adaptive,
-        ).await {
-            let _ = tokio::io::copy_bidirectional(&mut client_stream, &mut backend_stream).await;
+        )
+        .await
+        {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                // Post-Handshake Slowloris Idle Timeout (RSK-06) - cleanly drop connection and free resources
+            }
+            Err(_) => {
+                let _ = tokio::io::copy_bidirectional(&mut client_stream, &mut backend_stream).await;
+            }
         }
     } else {
         let _ = tokio::io::copy_bidirectional(&mut client_stream, &mut backend_stream).await;
     }
 }
 
-pub fn start_gate_engine(config: Arc<RuntimeConfig>, stats: Arc<Stats>) {
+pub fn start_gate_engine(
+    config: Arc<RuntimeConfig>,
+    stats: Arc<Stats>,
+    shutdown_rx: tokio::sync::watch::Receiver<bool>,
+) {
     let num_cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
 
     let stats_reporter = Arc::clone(&stats);
+    let mut stats_rx = shutdown_rx.clone();
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            let total = stats_reporter.total_connections.load(Ordering::Relaxed);
-            if total > 0 {
-                println!(
-                    "📊 [Vector Gate Stats] Total: {} | Custom: {} | Syslog: {} | Beats: {} | Fluent: {} | Splunk: {} | Datadog: {} | Firehose: {} | Heroku: {} | PromRW: {} | PromPG: {} | OTel: {} | VectorNative: {} | StatsD: {} | dnstap: {} | HTTP: {} | Raw: {}",
-                    total,
-                    stats_reporter.custom_conns.load(Ordering::Relaxed),
-                    stats_reporter.syslog_conns.load(Ordering::Relaxed),
-                    stats_reporter.beats_conns.load(Ordering::Relaxed),
-                    stats_reporter.fluent_conns.load(Ordering::Relaxed),
-                    stats_reporter.splunk_conns.load(Ordering::Relaxed),
-                    stats_reporter.datadog_conns.load(Ordering::Relaxed),
-                    stats_reporter.aws_firehose_conns.load(Ordering::Relaxed),
-                    stats_reporter.heroku_conns.load(Ordering::Relaxed),
-                    stats_reporter.prom_rw_conns.load(Ordering::Relaxed),
-                    stats_reporter.prom_pg_conns.load(Ordering::Relaxed),
-                    stats_reporter.otel_conns.load(Ordering::Relaxed),
-                    stats_reporter.vector_native_conns.load(Ordering::Relaxed),
-                    stats_reporter.statsd_conns.load(Ordering::Relaxed),
-                    stats_reporter.dnstap_conns.load(Ordering::Relaxed),
-                    stats_reporter.http_conns.load(Ordering::Relaxed),
-                    stats_reporter.raw_conns.load(Ordering::Relaxed),
-                );
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                    let total = stats_reporter.total_connections.load(Ordering::Relaxed);
+                    if total > 0 {
+                        println!(
+                            "📊 [Vector Gate Stats] Total: {} | Custom: {} | Syslog: {} | Beats: {} | Fluent: {} | Splunk: {} | Datadog: {} | Firehose: {} | Heroku: {} | PromRW: {} | PromPG: {} | OTel: {} | VectorNative: {} | StatsD: {} | dnstap: {} | HTTP: {} | Raw: {}",
+                            total,
+                            stats_reporter.custom_conns.load(Ordering::Relaxed),
+                            stats_reporter.syslog_conns.load(Ordering::Relaxed),
+                            stats_reporter.beats_conns.load(Ordering::Relaxed),
+                            stats_reporter.fluent_conns.load(Ordering::Relaxed),
+                            stats_reporter.splunk_conns.load(Ordering::Relaxed),
+                            stats_reporter.datadog_conns.load(Ordering::Relaxed),
+                            stats_reporter.aws_firehose_conns.load(Ordering::Relaxed),
+                            stats_reporter.heroku_conns.load(Ordering::Relaxed),
+                            stats_reporter.prom_rw_conns.load(Ordering::Relaxed),
+                            stats_reporter.prom_pg_conns.load(Ordering::Relaxed),
+                            stats_reporter.otel_conns.load(Ordering::Relaxed),
+                            stats_reporter.vector_native_conns.load(Ordering::Relaxed),
+                            stats_reporter.statsd_conns.load(Ordering::Relaxed),
+                            stats_reporter.dnstap_conns.load(Ordering::Relaxed),
+                            stats_reporter.http_conns.load(Ordering::Relaxed),
+                            stats_reporter.raw_conns.load(Ordering::Relaxed),
+                        );
+                    }
+                }
+                _ = stats_rx.changed() => {
+                    if *stats_rx.borrow() {
+                        break;
+                    }
+                }
             }
         }
     });
@@ -399,6 +454,7 @@ pub fn start_gate_engine(config: Arc<RuntimeConfig>, stats: Arc<Stats>) {
         let cfg = Arc::clone(&config);
         let st = Arc::clone(&stats);
         let bind_addr = config.bind;
+        let mut rx = shutdown_rx.clone();
 
         tokio::spawn(async move {
             let listener = match create_reuseport_listener(bind_addr, &cfg) {
@@ -410,16 +466,25 @@ pub fn start_gate_engine(config: Arc<RuntimeConfig>, stats: Arc<Stats>) {
             };
 
             loop {
-                match listener.accept().await {
-                    Ok((stream, addr)) => {
-                        let c = Arc::clone(&cfg);
-                        let s = Arc::clone(&st);
-                        tokio::spawn(async move {
-                            handle_connection(stream, addr, c, s).await;
-                        });
+                tokio::select! {
+                    accept_res = listener.accept() => {
+                        match accept_res {
+                            Ok((stream, addr)) => {
+                                let c = Arc::clone(&cfg);
+                                let s = Arc::clone(&st);
+                                tokio::spawn(async move {
+                                    handle_connection(stream, addr, c, s).await;
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("[Worker {}] Accept error: {}", worker_id, e);
+                            }
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("[Worker {}] Accept error: {}", worker_id, e);
+                    _ = rx.changed() => {
+                        if *rx.borrow() {
+                            break;
+                        }
                     }
                 }
             }
@@ -427,7 +492,7 @@ pub fn start_gate_engine(config: Arc<RuntimeConfig>, stats: Arc<Stats>) {
     }
 }
 
-fn scan_vrl_dirs(dirs: &[std::path::PathBuf]) -> Vec<(String, u64)> {
+fn scan_vrl_dirs(dirs: &[std::path::PathBuf]) -> Vec<(String, u128)> {
     let mut files = Vec::new();
     for dir in dirs {
         if dir.exists() && dir.is_dir() {
@@ -438,19 +503,50 @@ fn scan_vrl_dirs(dirs: &[std::path::PathBuf]) -> Vec<(String, u64)> {
     files
 }
 
-fn scan_recursive_helper(root: &Path, current: &Path, files: &mut Vec<(String, u64)>) {
+fn scan_recursive_helper(root: &Path, current: &Path, files: &mut Vec<(String, u128)>) {
     if let Ok(entries) = std::fs::read_dir(current) {
         for entry in entries.filter_map(|e| e.ok()) {
             let p = entry.path();
             if p.is_dir() {
                 scan_recursive_helper(root, &p, files);
             } else if p.extension().map_or(false, |ext| ext == "vrl") {
-                let mtime = entry.metadata().and_then(|m| m.modified()).map_or(0, |t| {
-                    t.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+                let mtime_nano = entry.metadata().and_then(|m| m.modified()).map_or(0, |t| {
+                    t.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos())
                 });
                 let rel = p.strip_prefix(root).unwrap_or(&p).to_string_lossy().to_string();
-                files.push((rel, mtime));
+                files.push((rel, mtime_nano));
             }
+        }
+    }
+}
+
+fn spawn_vector_core(config_path: &Path) -> std::io::Result<tokio::process::Child> {
+    println!("🚀 Launching Vector Core pipeline: vector --config {}", config_path.display());
+    tokio::process::Command::new("vector")
+        .arg("--config")
+        .arg(config_path)
+        .spawn()
+}
+
+async fn graceful_shutdown(child: &mut tokio::process::Child) {
+    if let Some(pid) = child.id() {
+        println!("⏳ Forwarding SIGTERM to Vector Core (PID: {}). Flushing on-disk buffers...", pid);
+        unsafe {
+            libc::kill(pid as i32, libc::SIGTERM);
+        }
+    }
+    // Chờ tối đa 15 giây để Vector Core hoàn tất flush dữ liệu ra đĩa trước khi thoát
+    let grace_period = Duration::from_secs(15);
+    match tokio::time::timeout(grace_period, child.wait()).await {
+        Ok(Ok(status)) => {
+            println!("✅ Vector Core exited cleanly with status: {}", status);
+        }
+        Ok(Err(e)) => {
+            eprintln!("❌ Vector Core wait error during graceful shutdown: {}", e);
+        }
+        Err(_) => {
+            eprintln!("⚠️ Vector Core did not exit within 15s grace period. Forcing SIGKILL...");
+            let _ = child.kill().await;
         }
     }
 }
@@ -469,6 +565,25 @@ fn print_help() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // RSK-09: Background task to reap zombie child processes (PID 1 hygiene)
+    tokio::spawn(async {
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            unsafe {
+                let mut status = 0;
+                while libc::waitpid(-1, &mut status, libc::WNOHANG) > 0 {}
+            }
+        }
+    });
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let is_shutting_down = Arc::new(AtomicBool::new(false));
+    let current_child_pid = Arc::new(AtomicI32::new(0));
+
+    // RSK-08: Dual signal handlers for graceful shutdown (SIGTERM & SIGINT)
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+    let mut sigint = signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+
     let args: Vec<String> = env::args().collect();
 
     let mut config_file: Option<String> = None;
@@ -621,7 +736,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("============================================================");
 
-            start_gate_engine(runtime_cfg, stats);
+            start_gate_engine(runtime_cfg, stats, shutdown_rx.clone());
         } else {
             println!("============================================================");
             println!("🚪 [Vector Gate Phase 0: BYPASS]");
@@ -635,20 +750,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if needs_sanitization {
             let sanitized = unified_cfg.sanitized_vector_yaml()?;
             let tmp_path = PathBuf::from(format!("/tmp/.vector_runtime_{}.yaml", std::process::id()));
-            std::fs::write(&tmp_path, &sanitized)?;
+            let tmp_atomic = format!("{}.tmp.{}", tmp_path.display(), std::process::id());
+            std::fs::write(&tmp_atomic, &sanitized)?;
+            std::fs::rename(&tmp_atomic, &tmp_path)?;
             vector_config_path = tmp_path.clone();
             tmp_file_to_clean = Some(tmp_path);
         }
-
-        println!("🚀 Launching Vector Core pipeline: vector --config {}", vector_config_path.display());
-
-        let mut child = tokio::process::Command::new("vector")
-            .arg("--config")
-            .arg(&vector_config_path)
-            .spawn()
-            .expect("Failed to spawn Vector Core process");
-
-        let child_pid = child.id();
 
         // Spawn VRL Watcher if auto_remap directories or vrl_dir is enabled
         let mut _watcher_handle = None;
@@ -660,27 +767,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let tmp_path_clone = vector_config_path.clone();
             let mut unified_cfg_clone = unified_cfg.clone();
             let initial_scan = scan_vrl_dirs(&vrl_dirs_clone);
+            let child_pid_tracker = Arc::clone(&current_child_pid);
+            let is_shutting_down_watcher = Arc::clone(&is_shutting_down);
 
             _watcher_handle = Some(tokio::spawn(async move {
                 let mut last_scan = initial_scan;
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    if is_shutting_down_watcher.load(Ordering::Relaxed) {
+                        break;
+                    }
                     let current_scan = scan_vrl_dirs(&vrl_dirs_clone);
                     if current_scan != last_scan {
-                        println!("✨ [Vector Gate VRL] Detected changes in VRL directories ({:?}). Plugins: {} files. Re-synthesizing transforms...", vrl_dirs_clone, current_scan.len());
-                        last_scan = current_scan;
+                        println!(
+                            "✨ [Vector Gate VRL] Detected changes in VRL directories ({:?}). Debouncing for 2 seconds...",
+                            vrl_dirs_clone
+                        );
+
+                        // RSK-05: Debounce 2 seconds before reloading to allow multi-file writes to settle
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+                        // Re-scan after debounce to capture all settled changes
+                        let settled_scan = scan_vrl_dirs(&vrl_dirs_clone);
+                        last_scan = settled_scan;
+
+                        println!(
+                            "✨ [Vector Gate VRL] Applying settled VRL changes. Plugins: {} files. Re-synthesizing transforms...",
+                            last_scan.len()
+                        );
+
                         if let Err(e) = unified_cfg_clone.synthesize_vrl_transforms() {
                             eprintln!("❌ Failed to synthesize VRL transforms: {}", e);
                             continue;
                         }
                         match unified_cfg_clone.sanitized_vector_yaml() {
                             Ok(yaml) => {
-                                if let Err(e) = std::fs::write(&tmp_path_clone, yaml) {
-                                    eprintln!("❌ Failed to write updated vector runtime config: {}", e);
-                                } else if let Some(pid) = child_pid {
-                                    println!("🔄 [Vector Gate VRL] Reloading Vector Core with SIGHUP (PID: {})...", pid);
-                                    unsafe {
-                                        libc::kill(pid as i32, libc::SIGHUP);
+                                // RSK-05: Atomic File Swap (Temp-and-Rename)
+                                let tmp_atomic = format!("{}.tmp.{}", tmp_path_clone.display(), std::process::id());
+                                if let Err(e) = std::fs::write(&tmp_atomic, &yaml) {
+                                    eprintln!("❌ Failed to write temporary runtime config: {}", e);
+                                } else if let Err(e) = std::fs::rename(&tmp_atomic, &tmp_path_clone) {
+                                    eprintln!("❌ Atomic rename failed: {}", e);
+                                    let _ = std::fs::remove_file(&tmp_atomic);
+                                } else {
+                                    let pid = child_pid_tracker.load(Ordering::Relaxed);
+                                    if pid > 0 {
+                                        println!("🔄 [Vector Gate VRL] Reloading Vector Core with SIGHUP (PID: {})...", pid);
+                                        unsafe {
+                                            libc::kill(pid, libc::SIGHUP);
+                                        }
                                     }
                                 }
                             }
@@ -691,16 +826,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }));
         }
 
-        tokio::select! {
-            res = child.wait() => {
-                match res {
-                    Ok(exit_status) => println!("Vector Core exited with status: {}", exit_status),
-                    Err(e) => eprintln!("Vector Core error: {}", e),
+        // RSK-09: Supervisor restart loop & RSK-08 Graceful Shutdown
+        let mut restart_count = 0;
+        while !is_shutting_down.load(Ordering::SeqCst) {
+            let mut child = match spawn_vector_core(&vector_config_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("❌ Failed to spawn Vector Core: {}", e);
+                    if is_shutting_down.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    continue;
                 }
-            }
-            _ = tokio::signal::ctrl_c() => {
-                println!("\nReceived shutdown signal. Stopping Vector Core and Gate gracefully...");
-                let _ = child.kill().await;
+            };
+
+            let pid = child.id().unwrap_or(0) as i32;
+            current_child_pid.store(pid, Ordering::SeqCst);
+
+            tokio::select! {
+                status = child.wait() => {
+                    current_child_pid.store(0, Ordering::SeqCst);
+                    if is_shutting_down.load(Ordering::SeqCst) {
+                        match status {
+                            Ok(st) => println!("Vector Core stopped: {}", st),
+                            Err(e) => eprintln!("Vector Core wait error during shutdown: {}", e),
+                        }
+                        break;
+                    }
+                    restart_count += 1;
+                    match status {
+                        Ok(st) => eprintln!("⚠️ [Supervisor] Vector Core exited (status: {}). Restarting (#{})...", st, restart_count),
+                        Err(e) => eprintln!("⚠️ [Supervisor] Vector Core error: {}. Restarting (#{})...", e, restart_count),
+                    }
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+                _ = sigterm.recv() => {
+                    println!("\n🛑 [Vector Gate] Received SIGTERM from Orchestrator. Initiating Graceful Shutdown...");
+                    is_shutting_down.store(true, Ordering::SeqCst);
+                    let _ = shutdown_tx.send(true);
+                    graceful_shutdown(&mut child).await;
+                    break;
+                }
+                _ = sigint.recv() => {
+                    println!("\n🛑 [Vector Gate] Received SIGINT (Ctrl+C). Initiating Graceful Shutdown...");
+                    is_shutting_down.store(true, Ordering::SeqCst);
+                    let _ = shutdown_tx.send(true);
+                    graceful_shutdown(&mut child).await;
+                    break;
+                }
             }
         }
 
@@ -720,10 +894,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let stats = Arc::new(Stats::default());
     let cfg = Arc::new(standalone_cfg);
-    start_gate_engine(cfg, stats);
+    start_gate_engine(cfg, stats, shutdown_rx);
 
-    tokio::signal::ctrl_c().await?;
-    println!("Shutting down standalone Vector Gate.");
+    tokio::select! {
+        _ = sigterm.recv() => {
+            println!("\n🛑 Received SIGTERM. Shutting down standalone Vector Gate...");
+            let _ = shutdown_tx.send(true);
+        }
+        _ = sigint.recv() => {
+            println!("\n🛑 Received SIGINT (Ctrl+C). Shutting down standalone Vector Gate...");
+            let _ = shutdown_tx.send(true);
+        }
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    println!("Standalone Vector Gate shutdown complete.");
 
     Ok(())
 }

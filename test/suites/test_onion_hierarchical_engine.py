@@ -194,7 +194,7 @@ if err == null {
         with open(snort_vrl_path, "w", encoding="utf-8") as f:
             f.write(snort_content)
         print(f"  [INFO] Dropped new plugin: {snort_vrl_path}")
-        time.sleep(1.5) # Wait for watcher SIGHUP reload
+        time.sleep(3.0) # Wait for watcher 2-second debounce + SIGHUP reload
 
         truncate_logs()
         snort_payload = b'<34>Oct 25 12:00:00 ids01 snort: [SNORT] 9901: Remote Code Execution Exploit Attempt\n'

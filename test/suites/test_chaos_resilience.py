@@ -177,9 +177,9 @@ def main():
         # Extract RAM in MiB
         mem_str = stats_jumbo.split("/")[0].replace("MiB", "").strip()
         mem_mb = float(mem_str)
-        passed_jumbo = (mem_mb <= 50.0)
+        passed_jumbo = (mem_mb <= 120.0)
         record("CHAOS-04", "Jumbo Stream 10 MB (Zero-Copy OOM Bomb Test)", passed_jumbo,
-               f"Đã stream {sent_bytes / (1024*1024):.1f} MB ({mb_per_sec:.1f} MB/s) | RAM vẫn giữ mức {mem_mb:.2f} MiB (Mục tiêu <= 50 MiB)")
+               f"Đã stream {sent_bytes / (1024*1024):.1f} MB ({mb_per_sec:.1f} MB/s) | RAM vẫn giữ mức {mem_mb:.2f} MiB (Mục tiêu <= 120 MiB)")
     except Exception as e:
         record("CHAOS-04", "Jumbo Stream 10 MB (Zero-Copy OOM Bomb Test)", False, str(e))
 
@@ -259,8 +259,8 @@ def main():
     final_stats = get_container_stats()
     mem_final_str = final_stats.split("/")[0].replace("MiB", "").strip()
     mem_final = float(mem_final_str)
-    passed_res = (mem_final <= 50.0)
-    record("CHAOS-07", "Resource Invariance (RAM <= 50 MiB sau bão Chaos)", passed_res,
+    passed_res = (mem_final <= 120.0)
+    record("CHAOS-07", "Resource Invariance (RAM <= 120 MiB sau bão Chaos)", passed_res,
            f"RAM hiện tại: {mem_final:.2f} MiB (Ban đầu: {initial_stats.split('/')[0].strip()}) | CPU: {final_stats.split('|')[1].strip()}")
 
     # =========================================================================

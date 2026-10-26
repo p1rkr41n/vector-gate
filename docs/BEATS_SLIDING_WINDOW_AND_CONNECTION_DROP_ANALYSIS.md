@@ -256,3 +256,4 @@ output.logstash:
 | **Lỗi `invalid sequence number`** | Thường xuyên xuất hiện khi mạng lag $> 30\,\text{s}$ làm Filebeat bị khóa outlet. | **Triệt tiêu 100%** nhờ window 512 events, `pipelining: 0` và `acknowledgements: false`. |
 | **Log bị nhân bản trên SIEM** | Xảy ra liên tục do `tokio::select!` trong Splice vứt bỏ gói tin ACK. | **Bảo toàn 100% ACK** nhờ cơ chế Graceful Half-Close trong `splice.rs`. |
 | **Khả năng tự phục hồi** | Phải restart dịch vụ Vector bằng tay. | **Tự động phục hồi hoàn toàn trong $< 30\,\text{s}$** sau mỗi sự cố đứt mạng. |
+

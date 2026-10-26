@@ -33,6 +33,11 @@ SUITES = {
         "desc": "Adversarial Chaos & Stress Resilience (Slowloris, Storms, Fuzzing)",
         "requires_gate": True
     },
+    "beats_rsk": {
+        "file": "test_beats_and_rsk_hardening.py",
+        "desc": "Beats Sliding Window, Flaky Drop Churn & P0-P2 Risk Remediation",
+        "requires_gate": True
+    },
     "deep_e2e": {
         "file": "test_deep_e2e_verification.py",
         "desc": "Deep End-to-End Declarative Routing & Zero-Port Auto-Wiring",

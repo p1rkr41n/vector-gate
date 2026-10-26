@@ -8,6 +8,8 @@ services:
     image: l1ghtg3m/vector-gate:2.4.3
     container_name: vector-smart-gate
     restart: unless-stopped
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
     ports:
       - "5000:5000"
     environment:
@@ -19,8 +21,8 @@ services:
       - ./output:/var/log/vector
     ulimits:
       nofile:
-        soft: 65536
-        hard: 65536
+        soft: 1048576
+        hard: 1048576
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:5000/", "-X", "POST", "-d", "healthcheck"]
       interval: 5s

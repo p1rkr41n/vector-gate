@@ -5,6 +5,15 @@
 #---
 parsed, err = parse_json(.message)
 if err == null {
-    . = merge!(., parsed)
+    if is_object(parsed) {
+        # Bảo vệ các trường định tuyến hệ thống không bị ghi đè bởi payload JSON
+        del(parsed.type_log)
+        del(parsed.source_id)
+        del(parsed.ingress_port)
+        del(parsed.parsed)
+        . = merge!(., parsed)
+    } else {
+        .payload = parsed
+    }
     .parsed = true
 }

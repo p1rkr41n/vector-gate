@@ -99,6 +99,7 @@ sources:
     type: socket
     mode: tcp
     address: "gates.custom_binary_iot"
+    max_length: 10485760
     decoding:
       codec: bytes
 
@@ -106,6 +107,7 @@ sources:
     type: socket
     mode: tcp
     address: "gates.custom_app_signature"
+    max_length: 10485760
     decoding:
       codec: bytes
 
@@ -113,6 +115,7 @@ sources:
     type: socket
     mode: tcp
     address: "gates.custom_offset_signature"
+    max_length: 10485760
     decoding:
       codec: bytes
 
@@ -121,10 +124,13 @@ sources:
     type: syslog
     mode: tcp
     address: "gates.syslog_gate"
+    max_length: 10485760
 
   in_beats:
     type: logstash
     address: "gates.beats_gate"
+    receive_buffer_bytes: 1048576
+    acknowledgements: false
 
   in_fluent:
     type: fluent
@@ -189,6 +195,7 @@ sources:
     type: socket
     mode: tcp
     address: "gates.other"
+    max_length: 10485760
     decoding:
       codec: bytes
 
@@ -353,6 +360,10 @@ sinks:
     path: "/var/log/vector/forwarded_logs.ndjson"
     encoding:
       codec: json
+    buffer:
+      type: disk
+      max_size: 10737418240 # 10GB disk buffer
+      when_full: block
 
   # Blackhole Sink cho unmatched traffic
   blackhole_sink:

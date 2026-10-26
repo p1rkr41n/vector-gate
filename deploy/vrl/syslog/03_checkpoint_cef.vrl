@@ -4,9 +4,11 @@
 # vendor: CheckPoint
 # priority: 3
 #---
-parsed, err = parse_regex(.message, r'^CEF:(?P<cef_ver>\d+)\|(?P<vendor>[^|]+)\|(?P<product>[^|]+)\|(?P<version>[^|]+)\|(?P<sig_id>[^|]+)\|(?P<name>[^|]+)\|(?P<severity>[^|]+)\|(.*)')
-if err == null {
-    . = merge!(., parsed)
-    .parsed = true
-    .vendor = "CheckPoint"
+if starts_with(string!(.message), "CEF:") {
+    parsed, err = parse_regex(.message, r'^CEF:(?P<cef_ver>\d+)\|(?P<vendor>[^|]{1,64})\|(?P<product>[^|]{1,64})\|(?P<version>[^|]{1,32})\|(?P<sig_id>[^|]{1,32})\|(?P<name>[^|]{1,128})\|(?P<severity>[^|]{1,16})\|(?P<extension>.*)$')
+    if err == null {
+        . = merge!(., parsed)
+        .parsed = true
+        .vendor = "CheckPoint"
+    }
 }
