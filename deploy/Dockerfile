@@ -31,10 +31,12 @@ LABEL description="Vector Smart Gate (Multi-Protocol Ingress & Transpiler)"
 
 USER root
 
-# Install runtime dependencies (libssl, curl for healthchecks)
+# Install runtime dependencies (libssl, curl for healthchecks, iproute2/iptables for transparent proxying)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    iproute2 \
+    iptables \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy compiled vector-gate binary from builder stage

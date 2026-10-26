@@ -121,6 +121,10 @@ pub struct GateOptions {
     #[serde(default = "default_true")]
     pub pipe_adaptive: bool,
 
+    /// Whether to preserve client L3/L4 source IP using Linux IP_TRANSPARENT socket option
+    #[serde(default = "default_false")]
+    pub transparent_ip: bool,
+
     /// Directory containing drop-in VRL parsing scripts (*.vrl)
     #[serde(default)]
     pub vrl_dir: Option<PathBuf>,
@@ -163,6 +167,7 @@ impl Default for GateOptions {
             sniff_window_bytes: default_sniff_window(),
             pipe_buffer: 16,
             pipe_adaptive: true,
+            transparent_ip: false,
             vrl_dir: None,
             vrl_watch: true,
             internal_port_base: None,

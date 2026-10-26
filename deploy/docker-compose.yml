@@ -5,11 +5,13 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: l1ghtg3m/vector-gate:2.4.3
+    image: l1ghtg3m/vector-gate:2.5.0
     container_name: vector-smart-gate
     restart: unless-stopped
     stop_signal: SIGTERM
     stop_grace_period: 30s
+    cap_add:
+      - NET_ADMIN
     ports:
       - "5000:5000"
     environment:

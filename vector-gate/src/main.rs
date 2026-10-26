@@ -26,6 +26,7 @@ pub struct RuntimeConfig {
     pub tcp_nodelay: bool,
     pub pipe_buffer: usize,
     pub pipe_adaptive: bool,
+    pub transparent_ip: bool,
 }
 
 impl Default for RuntimeConfig {
@@ -50,6 +51,7 @@ impl Default for RuntimeConfig {
             tcp_nodelay: true,
             pipe_buffer: 16,
             pipe_adaptive: true,
+            transparent_ip: false,
         }
     }
 }
@@ -67,6 +69,7 @@ impl RuntimeConfig {
             tcp_nodelay: gate.options.tcp_nodelay,
             pipe_buffer: gate.options.resolved_pipe_pages(),
             pipe_adaptive: gate.options.pipe_adaptive,
+            transparent_ip: gate.options.transparent_ip,
         }
     }
 }
@@ -314,6 +317,140 @@ fn configure_robust_socket(stream: &tokio::net::TcpStream) {
     }
 }
 
+/// Setup Linux policy routing for loopback reflection with IP_TRANSPARENT
+pub fn setup_transparent_ip_routing() {
+    #[cfg(target_os = "linux")]
+    {
+        println!("🔧 [Transparent IP] Initializing Linux kernel policy routing for loopback reflection...");
+        let cmds = [
+            ("ip", vec!["rule", "add", "from", "127.0.0.1/32", "lookup", "100"]),
+            ("ip", vec!["route", "add", "local", "0.0.0.0/0", "dev", "lo", "table", "100"]),
+            ("ip", vec!["-6", "rule", "add", "from", "::1/128", "lookup", "100"]),
+            ("ip", vec!["-6", "route", "add", "local", "::/0", "dev", "lo", "table", "100"]),
+        ];
+
+        for (prog, args) in &cmds {
+            let res = std::process::Command::new(prog).args(args).output();
+            match res {
+                Ok(out) => {
+                    if out.status.success() {
+                        println!("   ✅ Policy routing rule applied: {} {}", prog, args.join(" "));
+                    } else {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        if stderr.contains("File exists") {
+                            println!("   ℹ️ Policy routing rule already active: {} {}", prog, args.join(" "));
+                        } else {
+                            println!("   ℹ️ Policy routing note ({} {}): {}", prog, args.join(" "), stderr.trim());
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("   ⚠️ Notice: Unable to execute '{} {}': {}", prog, args.join(" "), e);
+                }
+            }
+        }
+    }
+}
+
+/// Attempt transparent connection preserving client IP via IP_TRANSPARENT
+async fn try_connect_transparent(
+    backend_addr: SocketAddr,
+    peer_addr: SocketAddr,
+) -> std::io::Result<TcpStream> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::io::AsRawFd;
+
+        let socket = match backend_addr {
+            SocketAddr::V4(_) => {
+                if !peer_addr.is_ipv4() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Address family mismatch: backend is IPv4 but peer is IPv6",
+                    ));
+                }
+                tokio::net::TcpSocket::new_v4()?
+            }
+            SocketAddr::V6(_) => {
+                if !peer_addr.is_ipv6() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Address family mismatch: backend is IPv6 but peer is IPv4",
+                    ));
+                }
+                tokio::net::TcpSocket::new_v6()?
+            }
+        };
+
+        let fd = socket.as_raw_fd();
+        let optval: libc::c_int = 1;
+
+        let (level, optname) = match peer_addr {
+            SocketAddr::V4(_) => (libc::SOL_IP, libc::IP_TRANSPARENT),
+            SocketAddr::V6(_) => (libc::SOL_IPV6, libc::IPV6_TRANSPARENT),
+        };
+
+        let res = unsafe {
+            libc::setsockopt(
+                fd,
+                level,
+                optname,
+                &optval as *const _ as *const libc::c_void,
+                std::mem::size_of_val(&optval) as libc::socklen_t,
+            )
+        };
+
+        if res != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        let _ = socket.set_reuseaddr(true);
+        let bind_addr = SocketAddr::new(peer_addr.ip(), 0);
+        socket.bind(bind_addr)?;
+
+        // Connect with 500ms timeout to detect any kernel routing drop and failover swiftly
+        let connect_fut = socket.connect(backend_addr);
+        match tokio::time::timeout(Duration::from_millis(500), connect_fut).await {
+            Ok(conn_res) => conn_res,
+            Err(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Transparent connection timed out (policy routing may not be configured)",
+            )),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (backend_addr, peer_addr);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "Transparent IP is only supported on Linux",
+        ))
+    }
+}
+
+/// Establish connection to backend with transparent IP and automatic graceful fallback
+async fn connect_backend(
+    backend_addr: SocketAddr,
+    peer_addr: SocketAddr,
+    transparent_ip: bool,
+) -> std::io::Result<TcpStream> {
+    if transparent_ip {
+        match try_connect_transparent(backend_addr, peer_addr).await {
+            Ok(stream) => return Ok(stream),
+            Err(e) => {
+                static FALLBACK_REPORTED: AtomicBool = AtomicBool::new(false);
+                if !FALLBACK_REPORTED.swap(true, Ordering::Relaxed) {
+                    eprintln!(
+                        "⚠️ [Transparent IP] Failed to establish transparent socket from {} to {}: {}. Gracefully falling back to standard loopback connection (zero downtime).",
+                        peer_addr, backend_addr, e
+                    );
+                }
+            }
+        }
+    }
+    TcpStream::connect(backend_addr).await
+}
+
 async fn handle_connection(
     mut client_stream: TcpStream,
     peer_addr: SocketAddr,
@@ -357,7 +494,7 @@ async fn handle_connection(
     let backend_addr = matched_route.target;
     let target_name = matched_route.name.as_str();
 
-    let mut backend_stream = match TcpStream::connect(backend_addr).await {
+    let mut backend_stream = match connect_backend(backend_addr, peer_addr, config.transparent_ip).await {
         Ok(s) => s,
         Err(e) => {
             eprintln!(
@@ -618,6 +755,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 standalone_cfg.bind = args[i + 1].parse().expect("Invalid --bind address");
                 i += 1;
             }
+            "--transparent-ip" => {
+                standalone_cfg.transparent_ip = true;
+            }
             _ => {
                 if !args[i].starts_with('-') && config_file.is_none() {
                     config_file = Some(args[i].clone());
@@ -716,6 +856,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if any_gate_enabled {
             println!("============================================================");
             println!("🚪 [Vector Gate Phase 0: ACTIVE - MULTI-GATE ENGINE (v2.5.0)]");
+
+            let any_transparent = unified_cfg.gates.values().any(|g| g.enabled && g.options.transparent_ip);
+            if any_transparent {
+                setup_transparent_ip_routing();
+            }
+
             for (gate_name, gate) in &unified_cfg.gates {
                 if !gate.enabled {
                     println!("ℹ️ Gate '{}': Disabled (Bypass mode)", gate_name);
@@ -727,6 +873,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("👉 Gate '{}' Ingress Endpoint: {}", gate_name, runtime_cfg.bind);
                 println!("   Zero-Copy Splice Engine   : Enabled (Linux Kernel pipe2)");
                 println!("   Multi-Queue SO_REUSEPORT  : Enabled");
+                println!(
+                    "   Transparent IP (TPROXY)   : {}",
+                    if runtime_cfg.transparent_ip { "Enabled (L3/L4 Client IP Preservation)" } else { "Disabled" }
+                );
                 println!("   Active Routes:");
                 for (idx, r) in runtime_cfg.routes.iter().enumerate() {
                     match &r.condition {
@@ -896,10 +1046,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // SCENARIO 2: Standalone Gate Server Mode
+    if standalone_cfg.transparent_ip {
+        setup_transparent_ip_routing();
+    }
     println!("============================================================");
     println!("🦀 Vector Gate Standalone Engine (Unified Declarative Routing) v2.0.0");
     println!("👉 Ingress Single Port     : {}", standalone_cfg.bind);
     println!("🚀 Zero-Copy Kernel Splice : Enabled (pipe2)");
+    println!(
+        "🛡️ Transparent IP (TPROXY) : {}",
+        if standalone_cfg.transparent_ip { "Enabled (L3/L4 Client IP Preservation)" } else { "Disabled" }
+    );
     println!("============================================================");
 
     let stats = Arc::new(Stats::default());

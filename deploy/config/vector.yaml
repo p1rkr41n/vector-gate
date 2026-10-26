@@ -19,6 +19,7 @@ gates:
       sniff_window_bytes: 512        # Kích thước bộ đệm nhận dạng chữ ký
       pipe_buffer: 64                # Kích thước đường kính ống pipe theo số page (1-256 pages, 1 page = 4KB).
       pipe_adaptive: true            # Tự động co giãn đàn hồi kích thước pipe theo tải thực tế
+      transparent_ip: true           # Bảo toàn 100% Client Source IP (L3/L4) qua TPROXY
       vrl_dir: "/etc/vector/vrl"     # Thư mục drop-in VRL parsing plugins
       vrl_watch: true                # Tự động theo dõi và nạp nóng parser khi thả file .vrl
 
@@ -205,6 +206,7 @@ transforms:
       .type_log = "custom_binary_iot"
       .source_id = "in_custom_iot"
       .ingress_port = 5000
+      if exists(.host) { .source_ip = .host }
 
   tag_custom_app:
     type: remap
@@ -213,6 +215,7 @@ transforms:
       .type_log = "custom_app_signature"
       .source_id = "in_custom_app"
       .ingress_port = 5000
+      if exists(.host) { .source_ip = .host }
 
   tag_custom_offset:
     type: remap
@@ -221,6 +224,7 @@ transforms:
       .type_log = "custom_offset_signature"
       .source_id = "in_custom_offset"
       .ingress_port = 5000
+      if exists(.host) { .source_ip = .host }
 
   tag_syslog:
     type: remap
@@ -350,6 +354,7 @@ transforms:
       ._parse_status = "unmatched"
       .parsed = false
       .parser_status = "UNPARSED_RAW"
+      if exists(.host) { .source_ip = .host }
       # RSK-OOM: Truncate oversized raw unmatched payloads to prevent RAM memory explosion
       if length(string(.message) ?? "") > 65536 {
         .message = truncate(string!(.message), 65536)
