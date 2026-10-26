@@ -60,6 +60,7 @@ make test
 ## 📋 TÀI LIỆU HƯỚNG DẪN CHI TIẾT
 * 📖 [**USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
 * 📦 [**samples/README.md** (Bộ Dữ Liệu Mẫu & Test Dispatcher)](samples/README.md): Bảng tra cứu 15 giao thức mẫu và script bắn test tự động [`samples/send_samples.py`](samples/send_samples.py).
+* 🔬 [**docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md** (Báo Cáo Đối Soát 641 Issues Upstream)](docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md): Phân tích chi tiết 8 Use Cases trọng yếu, đánh giá khả năng sửa lỗi & năng lực phòng vệ 641 issues VRL trên Vector Gate v2.4.3.
 * 📚 [**docs/MASTER_SPECIFICATION.md** (Hồ sơ Thiết kế Kỹ thuật & Báo cáo Nghiệm thu Master)](docs/MASTER_SPECIFICATION.md): Tài liệu tổng hợp toàn diện bao gồm toàn bộ Phân tích nghiệp vụ (BA) và Nghiệm thu chất lượng (QA) của toàn hệ thống Vector Gate.
 * 🏗️ [**docs/BA_MASTER_SPECIFICATION.md**](docs/BA_MASTER_SPECIFICATION.md): Đặc tả phân tích nghiệp vụ hợp nhất 9 chương kiến trúc (Zero-Port, Turbo-Kernel, Onion VRL, Custom Rules...).
 * 🧪 [**docs/QA_MASTER_REPORT.md**](docs/QA_MASTER_REPORT.md): Báo cáo nghiệm thu chất lượng hợp nhất toàn bộ các bộ test suites (100% PASS).
