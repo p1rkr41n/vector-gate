@@ -1,0 +1,24 @@
+# Issue #1538: Escaping characters in parse_cef?
+
+- **URL:** https://github.com/vectordotdev/vrl/issues/1538
+- **Author:** @sb1-nicolai
+- **Status:** CLOSED (completed)
+- **Created:** 2025-10-05T00:49:29Z
+- **Closed:** 2026-09-23T14:27:03Z
+- **Labels:** vrl:stdlib, stdlib:parse_cef
+
+## Description
+
+Hi.
+
+I am trying to get the parse_cef() function to escape characters, but I am unable to get it to parse fields that include `=` such as: `... cs4=None request="https://foo.com?id=foo&a=bar" abc=lol`
+
+Here is a link to the VRL Playground with example data: [link](https://playground.vrl.dev/?state=eyJwcm9ncmFtIjoiLmNlZl9ibG9iID0gXCJDRUY6MHxDeWJlckFya3xQVEF8MTIuNnwxfFN1c3BlY3RlZCBjcmVkZW50aWFscyB0aGVmdHw4fHN1c2VyPW1pa2UyQHByb2QxLmRvbWFpbi5jb20gc2hvc3Q9cHJvZDEuZG9tYWluLmNvbSBzcmM9MS4xLjEuMSBkdXNlcj1hbmR5QGRldjEuZG9tYWluLmNvbSBkaG9zdD1kZXYxLmRvbWFpbi5jb20gZHN0PTIuMi4yLjIgY3MxTGFiZWw9RXh0cmFEYXRhIGNzMT1Ob25lIGNzMkxhYmVsPUV2ZW50SUQgY3MyPTUyYjA2ODEyZWMzNTAwZWQ4NjRjNDYxZSBkZXZpY2VDdXN0b21EYXRlMUxhYmVsPWRldGVjdGlvbkRhdGUgZGV2aWNlQ3VzdG9tRGF0ZTE9MTM4ODU3NzkwMDAwMCBjczNMYWJlbD1QVEFsaW5rIGNzMz1odHRwczovLzEuMS4xLjEvaW5jaWRlbnRzLzUyYjA2ODEyZWMzNTAwZWQ4NjRjNDYxZSBjczRMYWJlbD1FeHRlcm5hbExpbmsgY3M0PU5vbmUgcmVxdWVzdD1odHRwczovL2Zvby5jb20%2FaWQ9Zm9vJmE9YmFyIGFiYz1mb29iYXJcIlxuIy5jZWZfYmxvYiA9IFwiQ0VGOjB8Q3liZXJBcmt8UFRBfDEyLjZ8MXxTdXNwZWN0ZWQgY3JlZGVudGlhbHMgdGhlZnR8OHxzdXNlcj1taWtlMkBwcm9kMS5kb21haW4uY29tIHNob3N0PXByb2QxLmRvbWFpbi5jb20gc3JjPTEuMS4xLjEgZHVzZXI9YW5keUBkZXYxLmRvbWFpbi5jb20gZGhvc3Q9ZGV2MS5kb21haW4uY29tIGRzdD0yLjIuMi4yIGNzMUxhYmVsPUV4dHJhRGF0YSBjczE9Tm9uZSBjczJMYWJlbD1FdmVudElEIGNzMj01MmIwNjgxMmVjMzUwMGVkODY0YzQ2MWUgZGV2aWNlQ3VzdG9tRGF0ZTFMYWJlbD1kZXRlY3Rpb25EYXRlIGRldmljZUN1c3RvbURhdGUxPTEzODg1Nzc5MDAwMDAgY3MzTGFiZWw9UFRBbGluayBjczM9aHR0cHM6Ly8xLjEuMS4xL2luY2lkZW50cy81MmIwNjgxMmVjMzUwMGVkODY0YzQ2MWUgY3M0TGFiZWw9RXh0ZXJuYWxMaW5rIGNzND1Ob25lIHJlcXVlc3Q9XCJodHRwczovL2Zvby5jb20%2FaWQ9Zm9vJmE9YmFyXCIgYWJjPWZvb2JhclwiXG4jLmNlZl9ibG9iID0gXCJDRUY6MHxDeWJlckFya3xQVEF8MTIuNnwxfFN1c3BlY3RlZCBjcmVkZW50aWFscyB0aGVmdHw4fHN1c2VyPW1pa2UyQHByb2QxLmRvbWFpbi5jb20gc2hvc3Q9cHJvZDEuZG9tYWluLmNvbSBzcmM9MS4xLjEuMSBkdXNlcj1hbmR5QGRldjEuZG9tYWluLmNvbSBkaG9zdD1kZXYxLmRvbWFpbi5jb20gZHN0PTIuMi4yLjIgY3MxTGFiZWw9RXh0cmFEYXRhIGNzMT1Ob25lIGNzMkxhYmVsPUV2ZW50SUQgY3MyPTUyYjA2ODEyZWMzNTAwZWQ4NjRjNDYxZSBkZXZpY2VDdXN0b21EYXRlMUxhYmVsPWRldGVjdGlvbkRhdGUgZGV2aWNlQ3VzdG9tRGF0ZTE9MTM4ODU3NzkwMDAwMCBjczNMYWJlbD1QVEFsaW5rIGNzMz1odHRwczovLzEuMS4xLjEvaW5jaWRlbnRzLzUyYjA2ODEyZWMzNTAwZWQ4NjRjNDYxZSBjczRMYWJlbD1FeHRlcm5hbExpbmsgY3M0PU5vbmUgcmVxdWVzdD1cXFwiaHR0cHM6Ly9mb28uY29tP2lkPWZvbyZhPWJhclxcXCIgYWJjPWZvb2JhclwiXG4uID0gcGFyc2VfY2VmISguY2VmX2Jsb2IpXG4iLCJldmVudCI6e30sImlzX2pzb25sIjpmYWxzZSwiZXJyb3IiOm51bGx9)
+
+If I am not mistaken CEF-formatted data should include quotes for data that requires it (as it does in my example) but I cannot get Vector to parse it correctly and have run out of ideas to test.
+
+Currently all CEF-formatted URL logs that include parameters are being dropped by the transformer and is what I am trying to fix.
+
+There is a chance I have overlooked something here, but from what I could see the only option to adjust the parse_cef function is `translate_custom_fields` which unfortunately does not help much in this case.
+
+Is it possible to use parse_cef or is it better to go with a custom transformer such as the one mentioned in [#6451](https://github.com/vectordotdev/vector/issues/6451#issue-809083142)?
