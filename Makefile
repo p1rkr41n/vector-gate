@@ -1,4 +1,4 @@
-.PHONY: all build build-local run stop status logs test clean
+.PHONY: all build build-local run stop status logs test test-all test-matrix test-onion clean
 
 IMAGE_NAME ?= l1ghtg3m/vector-gate:2.4.3
 IMAGE_LATEST ?= l1ghtg3m/vector-gate:latest
@@ -35,6 +35,16 @@ logs:
 # Verify gate health check on port 5000
 test:
 	curl -sf http://127.0.0.1:5000/ -X POST -H "Content-Type: application/json" -d '{"ping":"vector-gate-ok"}' && echo "\n✅ Vector Gate Health Check Passed!"
+
+# Run automated QA test suites in tests/
+test-all:
+	python3 tests/run_all_tests.py --all
+
+test-matrix:
+	python3 tests/run_all_tests.py --suite matrix
+
+test-onion:
+	python3 tests/run_all_tests.py --suite onion
 
 # Clean build artifacts
 clean:

@@ -59,6 +59,7 @@ make test
 
 ## 📋 TÀI LIỆU HƯỚNG DẪN CHI TIẾT
 * 📖 [**USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
+* 🧪 [**tests/README.md** (Thư Mục Kiểm Thử Tự Động Hóa Tập Trung)](tests/README.md): Bộ QA test suites tự động hóa (Python) gồm Standard Vector Matrix, Onion VRL, 15 Giao thức Ingress, Chaos Engineering, và runner [`tests/run_all_tests.py`](tests/run_all_tests.py).
 * 📦 [**samples/README.md** (Bộ Dữ Liệu Mẫu & Test Dispatcher)](samples/README.md): Bảng tra cứu 15 giao thức mẫu và script bắn test tự động [`samples/send_samples.py`](samples/send_samples.py).
 * 🔬 [**docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md** (Báo Cáo Đối Soát 641 Issues Upstream)](docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md): Phân tích chi tiết 8 Use Cases trọng yếu, đánh giá khả năng sửa lỗi & năng lực phòng vệ 641 issues VRL trên Vector Gate v2.4.3.
 * 📚 [**docs/MASTER_SPECIFICATION.md** (Hồ sơ Thiết kế Kỹ thuật & Báo cáo Nghiệm thu Master)](docs/MASTER_SPECIFICATION.md): Tài liệu tổng hợp toàn diện bao gồm toàn bộ Phân tích nghiệp vụ (BA) và Nghiệm thu chất lượng (QA) của toàn hệ thống Vector Gate.
@@ -133,8 +134,19 @@ sinks:
 
 ## ⚡ TEST THỬ NGHIỆM TƯƠNG TÁC NGAY
 
+### 1. Chạy Bộ Kiểm Thử Tự Động Hóa (Python Test Suites)
 ```bash
-# 1. Test Syslog
+# Chạy toàn bộ bài test độc lập (Matrix + Onion VRL):
+make test-all
+# Hoặc chạy trực tiếp qua runner:
+python3 tests/run_all_tests.py
+
+# Chạy riêng biệt từng bộ kiểm thử:
+make test-matrix   # 8 tính năng tiêu chuẩn của Vector Core VRL
+make test-onion    # Bóc tách phân tầng Onion và Hot-Drop SIGHUP
+```
+
+### 2. Bắn Dữ Liệu Thủ Công Qua Cổng 5000
 echo "<34>Oct 25 08:45:00 myhost app: Test log to gate 5000" | nc -w 1 127.0.0.1 5000
 
 # 2. Test Splunk HEC
