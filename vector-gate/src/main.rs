@@ -161,10 +161,37 @@ pub fn match_predefined_protocol(buf: &[u8], proto: PredefinedProtocol) -> bool 
     }
 
     match proto {
-        PredefinedProtocol::Syslog => buf[0] == b'<',
+        PredefinedProtocol::Syslog => {
+            // Traditional Syslog: starts with '<' (<PRI>...)
+            if buf[0] == b'<' {
+                return true;
+            }
+            // RFC 6587: Octet-Counted framing (e.g. "128 <14>1...")
+            if buf[0].is_ascii_digit() {
+                if let Some(space_pos) = buf.iter().take(10).position(|&b| b == b' ') {
+                    if space_pos > 0 && buf[..space_pos].iter().all(|b| b.is_ascii_digit()) {
+                        if buf.len() > space_pos + 1 && buf[space_pos + 1] == b'<' {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
         PredefinedProtocol::Beats => buf[0] == 0x32 || buf[0] == 0x31,
         PredefinedProtocol::Fluent => (0x92..=0x94).contains(&buf[0]),
-        PredefinedProtocol::VectorNative => buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"),
+        PredefinedProtocol::VectorNative => {
+            if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+                // If it contains opentelemetry path/service, don't match vector native
+                if let Ok(text) = std::str::from_utf8(buf) {
+                    !text.to_lowercase().contains("opentelemetry")
+                } else {
+                    true
+                }
+            } else {
+                false
+            }
+        }
         PredefinedProtocol::Dnstap => buf.len() >= 4 && buf[0..4] == [0, 0, 0, 0],
         PredefinedProtocol::Statsd => {
             if let Ok(text) = std::str::from_utf8(buf) {
@@ -211,12 +238,23 @@ pub fn match_predefined_protocol(buf: &[u8], proto: PredefinedProtocol) -> bool 
         PredefinedProtocol::PrometheusPushgateway => {
             check_http_details(buf, |path, _text| path.starts_with("/metrics/job/"))
         }
-        PredefinedProtocol::OpenTelemetry => check_http_details(buf, |path, _text| {
-            path.starts_with("/v1/logs")
-                || path.starts_with("/v1/traces")
-                || path.starts_with("/v1/metrics")
-                || path.starts_with("/opentelemetry")
-        }),
+        PredefinedProtocol::OpenTelemetry => {
+            if buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+                if let Ok(text) = std::str::from_utf8(buf) {
+                    text.to_lowercase().contains("opentelemetry")
+                } else {
+                    false
+                }
+            } else {
+                check_http_details(buf, |path, text| {
+                    path.starts_with("/v1/logs")
+                        || path.starts_with("/v1/traces")
+                        || path.starts_with("/v1/metrics")
+                        || path.starts_with("/opentelemetry")
+                        || text.contains("opentelemetry")
+                })
+            }
+        }
         PredefinedProtocol::GenericHttp => is_http_signature(buf),
         PredefinedProtocol::RawSocket => true, // Fallback catch-all
     }
@@ -255,6 +293,9 @@ fn create_reuseport_listener(addr: SocketAddr, cfg: &RuntimeConfig) -> std::io::
     socket.set_reuse_address(true)?;
     if cfg.reuse_port {
         let _ = socket.set_reuse_port(true);
+    }
+    if let SocketAddr::V6(_) = addr {
+        let _ = socket.set_only_v6(false);
     }
     socket.set_nonblocking(true)?;
     if cfg.tcp_nodelay {
@@ -361,9 +402,21 @@ async fn try_connect_transparent(
     {
         use std::os::unix::io::AsRawFd;
 
+        // Normalize IPv4-mapped IPv6 address (::ffff:x.x.x.x) to native IPv4
+        let effective_peer = match peer_addr {
+            SocketAddr::V6(v6) => {
+                if let Some(v4) = v6.ip().to_ipv4() {
+                    SocketAddr::new(std::net::IpAddr::V4(v4), v6.port())
+                } else {
+                    peer_addr
+                }
+            }
+            SocketAddr::V4(_) => peer_addr,
+        };
+
         let socket = match backend_addr {
             SocketAddr::V4(_) => {
-                if !peer_addr.is_ipv4() {
+                if !effective_peer.is_ipv4() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         "Address family mismatch: backend is IPv4 but peer is IPv6",
@@ -372,7 +425,7 @@ async fn try_connect_transparent(
                 tokio::net::TcpSocket::new_v4()?
             }
             SocketAddr::V6(_) => {
-                if !peer_addr.is_ipv6() {
+                if !effective_peer.is_ipv6() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         "Address family mismatch: backend is IPv6 but peer is IPv4",
@@ -385,7 +438,7 @@ async fn try_connect_transparent(
         let fd = socket.as_raw_fd();
         let optval: libc::c_int = 1;
 
-        let (level, optname) = match peer_addr {
+        let (level, optname) = match effective_peer {
             SocketAddr::V4(_) => (libc::SOL_IP, libc::IP_TRANSPARENT),
             SocketAddr::V6(_) => (libc::SOL_IPV6, libc::IPV6_TRANSPARENT),
         };
@@ -405,7 +458,7 @@ async fn try_connect_transparent(
         }
 
         let _ = socket.set_reuseaddr(true);
-        let bind_addr = SocketAddr::new(peer_addr.ip(), 0);
+        let bind_addr = SocketAddr::new(effective_peer.ip(), 0);
         socket.bind(bind_addr)?;
 
         // Connect with 500ms timeout to detect any kernel routing drop and failover swiftly
