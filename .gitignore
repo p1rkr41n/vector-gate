@@ -28,7 +28,12 @@ test/bin/
 *.jsonl
 inbox_history.jsonl
 .last_offset
-.agents/skills/telegram-listener/.last_offset
+# Antigravity agent skills and local daemon data
+.agents/
+
+__pycache__/
+*.pyc
+
 vrl-mod/bin/
 vrl-mod/scratch/
 vrl-mod/tests/qa_data/*.evtx

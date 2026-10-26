@@ -4,6 +4,10 @@
 #---
 if !.parsed {
     ._parse_status = "unmatched"
-    ._raw_signature = slice!(string!(.message), 0, 32)
+    msg_str = string(.message) ?? ""
+    if length(msg_str) > 32 {
+        ._raw_signature = truncate(msg_str, 32)
+    } else {
+        ._raw_signature = msg_str
+    }
 }
-

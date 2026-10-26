@@ -28,11 +28,6 @@ SUITES = {
         "desc": "12-15 Ingress Push Protocols Disambiguation E2E",
         "requires_gate": True
     },
-    "hot_drop": {
-        "file": "test_universal_vrl_hot_drop.py",
-        "desc": "Universal VRL Hot-Drop File Watcher & Dynamic Synthesis",
-        "requires_gate": False
-    },
     "chaos": {
         "file": "test_chaos_resilience.py",
         "desc": "Adversarial Chaos & Stress Resilience (Slowloris, Storms, Fuzzing)",

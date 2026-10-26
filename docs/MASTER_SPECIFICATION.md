@@ -30,6 +30,12 @@
 - [Chương II.7: 7. Nghiệm Thu Bộ Nguồn Windows Event File (Pure-Rust Engine)](#qa-7)
 - [Chương II.8: 8. Nghiệm Thu Bản Vector Portable Turbo Trên Tệp Log 2.02 GB](#qa-8)
 
+### [PHẦN III: BÁO CÁO RÀ SOÁT RỦI RO KIẾN TRÚC & PHÒNG VỆ VẬN HÀNH (ENTERPRISE RISK & HARDENING)](#phan-3-risk)
+- [Chương III.1: 1. Ma Trận Đánh Giá Mức Độ Nghiêm Trọng Rủi Ro Enterprise (Risk Severity Matrix)](#risk-1)
+- [Chương III.2: 2. Rà Soát Chi Tiết 7 Lĩnh Vực Rủi Ro Trọng Yếu & Cơ Chế Phòng Vệ](#risk-2)
+- [Chương III.3: 3. Kịch Bản Ứng Phó Sự Cố Khẩn Cấp (Disaster Recovery Runbooks)](#risk-3)
+- [Chương III.4: 4. Quy Chuẩn Thông Số Cấu Hình Tối Ưu Sản Xuất (Production Hardening Guidelines)](#risk-4)
+
 ---
 
 <a id='phan-1-ba'></a>
@@ -2645,5 +2651,250 @@ Sau khi tiến hành tái cấu trúc mã nguồn:
 - **Binary đã cập nhật**: `vector-portable/bin/windows_event_file.exe`
 - **File nén ZIP triển khai**: `vector-portable-v0.60.0-windows-x64.zip`
 - **File mẫu 2.02 GB thực tế**: `D:\Shared_UserData\Downloads\vectormod\large_sample_2gb.evtx`
+
+---
+
+<a id='phan-3-risk'></a>
+# PHẦN III: BÁO CÁO RÀ SOÁT RỦI RO KIẾN TRÚC & QUY TRÌNH PHÒNG VỆ VẬN HÀNH ENTERPRISE (ARCHITECTURAL RISK AUDIT & PRODUCTION HARDENING)
+
+---
+
+<a id='risk-1'></a>
+## CHƯƠNG III.1: 1. Ma Trận Đánh Giá Mức Độ Nghiêm Trọng Rủi Ro Enterprise (Risk Severity Matrix)
+
+### 1. Giới Thiệu Khung Đánh Giá Rủi Ro
+Nhằm đáp ứng tiêu chuẩn vận hành mức Doanh nghiệp quy mô lớn (Enterprise High-Availability 99.999%), hệ thống **Vector Smart Gate v2.4.3** được đưa qua quy trình rà soát độc lập toàn diện bởi **Principal System Architect & Risk Auditor**. Ma trận rủi ro dưới đây lượng hóa các mối đe dọa kỹ thuật dựa trên công thức chuẩn:
+$$\text{Điểm Nguy Cơ (Risk Score)} = \text{Xác Suất (Likelihood: 1-5)} \times \text{Mức Độ Tác Động (Impact: 1-5)}$$
+Điểm số được ánh xạ sang chuẩn **CVSS v3.1 (Common Vulnerability Scoring System)** và phân loại theo thứ tự ưu tiên xử lý vận hành:
+- **P0 (Khẩn cấp - Critical)**: Đe dọa trực tiếp tính toàn vẹn dữ liệu, gây sập hệ thống hoặc làm gián đoạn luồng Ingress.
+- **P1 (Cao - High)**: Gây nghẽn cổ chai hiệu năng cục bộ, suy giảm tốc độ xử lý hoặc tăng độ trễ pipeline.
+- **P2 (Trung bình - Medium)**: Tác động quản trị, giám sát hoặc yêu cầu tinh chỉnh tham số cấu hình hệ điều hành.
+
+---
+
+### 2. Bảng Ma Trận Định Lượng Rủi Ro Doanh Nghiệp (Enterprise Risk Severity Matrix)
+
+| Mã Rủi Ro | Danh Mục Rủi Ro | Điểm Gốc Kỹ Thuật (Root Cause) | Xác Suất (L) | Tác Động (I) | Điểm Nguy Cơ (L x I) | Điểm CVSS 3.1 | Mức Ưu Tiên | Biện Pháp Phòng Vệ Trọng Yếu |
+|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---|
+| **RSK-01** | **Deadlock Splice & Cạn Kiệt Kernel Pipe Pages** | Vector Core chậm đọc; pipe đầy; `splice` nghẽn luồng; chạm ngưỡng `pipe-user-pages-hard`. | 3 | 5 | **15 (Critical)** | **8.6 (High)** | **P0** | Nâng `fs.pipe-user-pages-hard=1M`; gỡ bỏ `tokio::select!` hủy sớm; bọc timeout cho splice. |
+| **RSK-02** | **Cạn Kiệt Socket Port TIME_WAIT & 6x FD Multiplier** | 1 kết nối chiếm 6 FDs; dải Ephemeral ports bị chiếm dụng bởi các kết nối ngắn hạn ở trạng thái `TIME_WAIT`. | 4 | 4 | **16 (Critical)** | **8.2 (High)** | **P0** | Bật `net.ipv4.tcp_tw_reuse=1`; rút ngắn `tcp_fin_timeout=15`; nâng `nofile` lên 1,048,576. |
+| **RSK-03** | **Lệch Tải CPU Do Hashing `SO_REUSEPORT`** | Mọi client đi qua 1 proxy tập trung (cùng IP nguồn) dẫn đến mã băm 4-tuple dồn vào 1 CPU worker duy nhất. | 4 | 3 | **12 (High)** | **6.5 (Med)** | **P1** | Sử dụng Tokio work-stealing mpsc queue phân bổ nội bộ; mở rộng dải ephemeral ports của proxy. |
+| **RSK-04** | **ReDoS & Panic Do UTF-8 Split Trong Fallback VRL** | `slice!` trên chuỗi UTF-8 đa byte ném ngoại lệ abort pipeline; Regex CEF/Cisco không neo gây catastrophic backtracking. | 3 | 4 | **12 (High)** | **7.5 (High)** | **P1** | Thay thế `slice!` bằng `truncate()`; neo regex bằng `^` và `$`; giới hạn độ sâu JSON payload. |
+| **RSK-05** | **Race Condition & Đọc Tệp Rác Khi Nạp Nóng VRL** | File Watcher kiểm tra `mtime` dạng integer second; đọc trúng file đang ghi dở; ghi YAML không atomic. | 4 | 4 | **16 (Critical)** | **7.8 (High)** | **P0** | Dùng Atomic File Swap (Temp-and-Rename); tính băm SHA256 thay cho `mtime`; damping debounce 2s. |
+| **RSK-06** | **Tấn Công Treo Kết Nối (Post-Handshake Slowloris)** | Client gửi 1 byte vượt qua 200ms sniff timeout, sau đó giữ kết nối mở trong vòng lặp splice không timeout. | 4 | 4 | **16 (Critical)** | **8.1 (High)** | **P0** | Áp dụng `SPLICE_IDLE_TIMEOUT = 60s` cho cả hai chiều đọc/ghi trong `splice_direction`. |
+| **RSK-07** | **Bão Tải Tràn Hàng Đợi NIC Do Độc Tôn Cổng 5000** | Toàn bộ log hỗn hợp đổ vào 1 cổng; không có QoS; log kiểm toán quan trọng bị chèn ép bởi log rác. | 3 | 3 | **9 (Medium)** | **5.9 (Med)** | **P2** | Cấu hình NIC RSS Multi-Queue; phân luồng cổng phụ (Port 5001 cho Critical SIEM alerts). |
+| **RSK-08** | **Mất Dữ Liệu Khi Shutdown Do Bỏ Quên Signal SIGTERM** | `vector-gate` chỉ bắt `SIGINT`, bỏ qua `SIGTERM` từ Docker/K8s; container bị `SIGKILL` sau 10s, làm hỏng disk buffer. | 5 | 4 | **20 (Catastrophic)** | **8.8 (High)** | **P0** | Đăng ký bộ xử lý tín hiệu `SIGTERM` trong Tokio runtime; kích hoạt flush sạch trước khi exit. |
+| **RSK-09** | **Tiến Trình Ma (Zombie / Defunct) Rò Rỉ Namespace** | `vector-gate` làm PID 1 nhưng không có cơ chế gặt tiến trình con mồ côi (`waitpid(-1)`), làm cạn kiệt PID pool của host. | 3 | 3 | **9 (Medium)** | **6.0 (Med)** | **P2** | Tích hợp vòng lặp `waitpid(-1, &status, WNOHANG)` hoặc dùng `tini` làm sub-reaper trong Docker. |
+
+---
+
+<a id='risk-2'></a>
+## CHƯƠNG III.2: 2. Rà Soát Chi Tiết 7 Lĩnh Vực Rủi Ro Trọng Yếu & Cơ Chế Phòng Vệ
+
+---
+
+### 1. LĨNH VỰC 1: NGHẼN PIPE BUFFER & CẠN KIỆT KERNEL SPLICE ZERO-COPY
+- **Bản chất kiến trúc**:
+  Mỗi kết nối qua Vector Gate kích hoạt 2 ống pipe một chiều (`pipe_c2b` và `pipe_b2c`). Với `pipe_buffer: 64` (256 KB) và `pipe_adaptive: true` (cho phép giãn nở tới 1 MB), nhân Linux phân bổ các trang nhớ unswappable kernel slab.
+- **Rủi ro cạn kiệt tài nguyên**:
+  Khi số lượng kết nối đồng thời vượt quá 1,000, tổng dung lượng pipe yêu cầu có thể lên tới $2,000 \times 1\,\text{MB} = 2\,\text{GB}$ bộ nhớ đệm kernel, vượt xa ngưỡng mặc định `/proc/sys/fs/pipe-user-pages-hard` ($64\,\text{MB}$). Khi đó lệnh `fcntl(F_SETPIPE_SZ)` hoặc `pipe2()` văng lỗi `EPERM`/`ENOMEM`.
+- **Rủi ro hủy kết nối sớm do macro `tokio::select!`**:
+  Trong `splice.rs`:
+  ```rust
+  tokio::select! {
+      res1 = c2b => res1,
+      res2 = b2c => res2,
+  }
+  ```
+  Khi client đóng nửa luồng ghi (`TCP FIN`), hàm `c2b` trả về `Ok(())`, macro `tokio::select!` lập tức hủy tương lai `b2c`. Các gói tin phản hồi xác thực ứng dụng (Application ACK của Beats Lumberjack, Splunk HEC HTTP 200) đang trên đường từ Vector Core về Client bị hủy ngang, dẫn đến client liên tục gửi lại dữ liệu gây trùng lặp log trên diện rộng.
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Nâng ngưỡng hệ điều hành: `fs.pipe-user-pages-hard = 1048576` (cho phép cấp phát tới 4 GB pipe pages).
+  2. Tách biệt chu trình đóng kết nối: Chờ chiều phản hồi `b2c` hoàn tất việc gửi nốt các byte còn lại trong ống pipe trước khi giải phóng socket.
+
+---
+
+### 2. LĨNH VỰC 2: BÃO KẾT NỐI, CẠN KIỆT FILE DESCRIPTOR & EPHEMERAL PORTS
+- **Hệ số nhân File Descriptor (6x Multiplier)**:
+  Mỗi kết nối Ingress tiêu tốn chính xác:
+  $$\text{FDs} = 1 \text{ (Client Socket)} + 1 \text{ (Backend Socket)} + 2 \text{ (Pipe C2B)} + 2 \text{ (Pipe B2C)} = 6 \text{ FDs}$$
+  Với `ulimit -n 65536`, hệ thống chỉ chịu được tối đa $\sim 10,750$ kết nối đồng thời trước khi gặp lỗi `EMFILE`.
+- **Nghẽn cổng Ephemeral Ports do `TIME_WAIT`**:
+  Khi kết nối tới Vector Core qua loopback `127.0.0.1:17500+`, các kết nối ngắn hạn để lại socket ở trạng thái `TIME_WAIT` trong 60 giây. Với dải 28,232 cổng ephemeral, tần suất kết nối mới tối đa chỉ đạt $\sim 470 \text{ conns/sec}$. Vượt ngưỡng này, hệ thống sập với lỗi `Cannot assign requested address (os error 99)`.
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Kích hoạt `net.ipv4.tcp_tw_reuse = 1` và hạ `net.ipv4.tcp_fin_timeout = 15`.
+  2. Nâng giới hạn `ulimits.nofile` trong container lên `1048576`.
+  3. Mở rộng dải cổng `net.ipv4.ip_local_port_range = 1024 65535`.
+
+---
+
+### 3. LĨNH VỰC 3: BẪY LỖI VRL, REGEX REDOS & BÙNG NỔ BỘ NHỚ HEAP
+- **Lỗ hổng Panic do `slice!` trên chuỗi UTF-8**:
+  Trong `deploy/vrl/99_dead_letter_fallback.vrl`:
+  ```vrl
+  ._raw_signature = slice!(string!(.message), 0, 32)
+  ```
+  Hàm `slice!` cắt chuỗi theo byte index. Nếu ranh giới byte 32 cắt ngang qua một ký tự UTF-8 đa byte (tiếng Việt, tiếng Trung, emoji), VRL ném ngoại lệ Panic, làm sập sự kiện ngay tại tầng cứu vớt cuối cùng!
+- **Catastrophic Backtracking trong Regex**:
+  Mẫu CEF `r'^CEF:...\|(.*)'` chứa nhóm bắt tham lam không neo chặn cuối dòng. Khi gặp log rác dung lượng lớn, bộ máy Regex tiêu tốn hàng trăm mili-giây CPU để duyệt backtracking.
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Thay thế `slice!` bằng hàm an toàn ký tự `truncate(string!(.message), 32)`.
+  2. Neo chặt tất cả các mẫu regex bằng `^` và `$`, kiểm tra tiền tố bằng `starts_with()` trước khi gọi regex.
+  3. Áp dụng giới hạn `max_length: 10485760` (10 MB) tại Ingress Socket để loại trừ JSON Bombs.
+
+---
+
+### 4. LĨNH VỰC 4: RACE CONDITIONS & TRỄ NẠP NÓNG DYNAMIC VRL FILE WATCHER
+- **Lỗ hổng đọc dở dang (Partial File Read)**:
+  File watcher quét thư mục mỗi $500\,\text{ms}$. Nếu một tệp `.vrl` lớn đang được ghi dở dang qua mạng hoặc công cụ tự động, watcher đọc phải nội dung khuyết tật, biên dịch ra YAML sai cú pháp, khiến Vector Core từ chối nạp cấu hình.
+- **Mù sai khác trong cùng 1 giây (Sub-second Skew)**:
+  Watcher sử dụng `mtime.as_secs()`. Hai lần cập nhật tệp trong cùng một giây có giá trị `mtime` bằng nhau, khiến watcher bỏ qua hoàn toàn thay đổi mới.
+- **Ghi đè cấu hình không nguyên khối**:
+  Lệnh `std::fs::write(&tmp_path, yaml)` xóa trắng tệp cấu hình trước khi ghi xong, có thể khiến Vector Core đọc phải tệp 0-byte khi nhận SIGHUP.
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Áp dụng cơ chế **Atomic Swap**: Ghi ra tệp tạm `.tmp` rồi gọi `std::fs::rename()` (nguyên khối trên Linux VFS).
+  2. So sánh nội dung bằng mã băm **SHA-256** hoặc `mtime` dạng nano-giây (`as_nanos()`).
+  3. Bổ sung cơ chế **Debounce (2 giây)**: Chỉ kích hoạt SIGHUP khi thư mục VRL không có biến động nào trong 2 giây liên tiếp.
+
+---
+
+### 5. LĨNH VỰC 5: THẮT CỔ CHAI CỔNG ĐƠN (PORT 5000 MULTIPLEXING VS MULTI-PORT QOS)
+- **Hạn chế của phần cứng NIC RSS**:
+  Toeplitz Hash của card mạng phụ thuộc vào 4-tuple. Khi toàn bộ log doanh nghiệp đổ về cổng đích 5000 từ một cụm load balancer có số lượng IP nguồn hạn chế, RSS không thể chia đều gói tin vào các RX Ring Buffers, gây rớt gói mạng ở tầng vật lý (`rx_dropped`).
+- **Thiếu phân hạng dịch vụ (No QoS / Traffic Prioritization)**:
+  Log debug Nginx tốc độ cao có thể làm tràn hàng đợi socket, bóp nghẹt các bản ghi cảnh báo an ninh SIEM khẩn cấp (Cisco ASA, Windows Security EventID 4625).
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Bật NIC Multi-Queue và cấu hình RPS (Receive Packet Steering) trên Linux Host OS.
+  2. Kiến trúc mở rộng đa cổng: Dự phòng cổng Ingress chuyên biệt `5001` dành riêng cho High-Priority SIEM/Audit Logs.
+
+---
+
+### 6. LĨNH VỰC 6: PHÒNG CHỐNG TẤN CÔNG TỪ CHỐI DỊCH VỤ (DOS, SLOWLORIS & JUMBO BOMBS)
+- **Tấn công Post-Handshake Slowloris**:
+  Tham số `inspect_timeout_ms: 200` chỉ kiểm tra gói tin đầu tiên. Khi client gửi 1 byte ban đầu rồi giữ kết nối mở trong vòng lặp `splice` không có timeout, hàng nghìn kết nối treo sẽ chiếm dụng toàn bộ FDs của hệ thống.
+- **Jumbo Frame OOM Bomb**:
+  Một luồng stream liên tục hàng trăm megabytes không chứa ký tự ngắt dòng `\n` sẽ khiến bộ gom dòng của Vector Core phình to bộ nhớ Heap cho tới khi bị Linux OOM Killer tiêu diệt.
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Thêm `SPLICE_IDLE_TIMEOUT = Duration::from_secs(60)` vào vòng lặp `splice_direction` trong `splice.rs`.
+  2. Thiết lập giới hạn kích thước frame tối đa `max_length: 10485760` (10 MB) trong cấu hình `vector.yaml`.
+
+---
+
+### 7. LĨNH VỰC 7: GIÁM SÁT TIẾN TRÌNH SUPERVISOR (PID 1, ZOMBIE REAPING & CRASH LOOP)
+- **Lỗ hổng bỏ quên tín hiệu `SIGTERM`**:
+  `vector-gate` chạy làm PID 1 nhưng chỉ bắt `SIGINT` (Ctrl+C). Khi Docker/Kubernetes yêu cầu dừng container qua `SIGTERM`, Gate không phản hồi và bị cưỡng bức hạ sát bằng `SIGKILL` sau 10-30 giây, gây mất sạch dữ liệu log trong bộ đệm RAM và làm hỏng cơ sở dữ liệu offset trên đĩa.
+- **Vắng bóng cơ chế phục hồi tự động khi Vector Core sập**:
+  Khi Vector Core gặp panic hoặc lỗi ngoại cảnh, lệnh `child.wait()` kết thúc và Gate thoát luôn `main()`, khiến container bị dừng thay vì tự khởi động lại tiến trình con trong vài chục mili-giây.
+- **Cơ chế phòng vệ chuẩn Enterprise**:
+  1. Bổ sung bộ xử lý tín hiệu `tokio::signal::unix::SignalKind::terminate()` (`SIGTERM`) để thực hiện Graceful Shutdown hoàn hảo.
+  2. Bọc lời gọi `vector` trong vòng lặp `loop { ... child.wait() ... sleep(500ms) ... }` để tự động tái sinh Vector Core tức thời với RTO $< 500\,\text{ms}$.
+  3. Định kỳ gặt tiến trình con mồ côi bằng `libc::waitpid(-1, &mut status, libc::WNOHANG)`.
+
+---
+
+<a id='risk-3'></a>
+## CHƯƠNG III.3: 3. Kịch Bản Ứng Phó Sự Cố Khẩn Cấp (Disaster Recovery Runbooks)
+
+---
+
+### 🔴 RUNBOOK DR-01: Ứng Phó Tắc Nghẽn Kernel Pipe & Deadlock Backpressure
+1. **Triệu chứng**: Thông lượng ingesting về 0 EPS; CPU 0%; log xuất hiện `Kernel pipe splice write 0` hoặc `EPERM`.
+2. **Lệnh can thiệp khẩn cấp**:
+   ```bash
+   sudo sysctl -w fs.pipe-max-size=4194304
+   sudo sysctl -w fs.pipe-user-pages-hard=1048576
+   sudo sysctl -w fs.pipe-user-pages-soft=524288
+   ```
+3. **Khôi phục**: Khởi động lại nhẹ nhàng `docker restart vector-smart-gate`.
+
+---
+
+### 🔴 RUNBOOK DR-02: Xử Lý Bão Kết Nối & Cạn Kiệt Cổng TIME_WAIT / File Descriptor
+1. **Triệu chứng**: Log Gate xuất hiện `Cannot assign requested address (os error 99)`; client bị từ chối kết nối.
+2. **Lệnh can thiệp khẩn cấp**:
+   ```bash
+   sudo sysctl -w net.ipv4.tcp_tw_reuse=1
+   sudo sysctl -w net.ipv4.tcp_fin_timeout=15
+   sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+   ```
+3. **Xác minh**: Đếm số socket TIME_WAIT: `ss -tan 'sport = :5000 or dport = :5000' state time-wait | wc -l`.
+
+---
+
+### 🔴 RUNBOOK DR-03: Xử Lý Vector Core Crash Loop & Phục Hồi Tiến Trình Tức Thời
+1. **Triệu chứng**: Container liên tục restart; Gate báo `Vector Core exited with status`.
+2. **Lệnh can thiệp khẩn cấp**:
+   ```bash
+   # Kiểm tra cú pháp tệp runtime cấu hình
+   docker exec -it vector-smart-gate vector validate --no-environment /tmp/.vector_runtime_*.yaml
+   # Nếu do lỗi cú pháp VRL mới thêm vào, tạm cô lập thư mục VRL
+   docker exec -it vector-smart-gate mv /etc/vector/vrl /etc/vector/vrl_corrupted
+   docker exec -it vector-smart-gate mkdir -p /etc/vector/vrl
+   docker restart vector-smart-gate
+   ```
+
+---
+
+### 🔴 RUNBOOK DR-04: Ứng Cứu Khẩn Cấp Khi Bị Tấn Công Regex ReDoS / CPU 100%
+1. **Triệu chứng**: CPU $100\%$ liên tục; thông lượng tụt dưới 500 EPS.
+2. **Lệnh can thiệp khẩn cấp**:
+   ```bash
+   # Vô hiệu hóa ngay parser nghi vấn trong thư mục vrl
+   cd /home/manager/vectormod/deploy/vrl/syslog
+   mv 02_cisco_asa.vrl 02_cisco_asa.vrl.bak
+   mv 03_checkpoint_cef.vrl 03_checkpoint_cef.vrl.bak
+   # Watcher tự động nhận diện và nạp lại cấu hình sau 500ms
+   ```
+
+---
+
+### 🔴 RUNBOOK DR-05: Rollback Cấu Hình VRL Khi Nạp Nóng Thất Bại
+1. **Lệnh can thiệp**:
+   ```bash
+   cd /home/manager/vectormod
+   git checkout HEAD -- deploy/vrl/
+   touch deploy/vrl/99_dead_letter_fallback.vrl
+   ```
+
+---
+
+<a id='risk-4'></a>
+## CHƯƠNG III.4: 4. Quy Chuẩn Thông Số Cấu Hình Tối Ưu Sản Xuất (Production Hardening Guidelines)
+
+### 1. Bảng Tham Số Tối Ưu Hóa Nhân Linux (`/etc/sysctl.d/99-vector-gate.conf`)
+
+```ini
+# GIỚI HẠN PIPE KERNEL ZERO-COPY
+fs.pipe-user-pages-hard = 1048576
+fs.pipe-user-pages-soft = 524288
+fs.pipe-max-size = 4194304
+
+# KHẮC PHỤC CẠN KIỆT TIME_WAIT & CỔNG LOCAL
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.ip_local_port_range = 1024 65535
+
+# TỐI ƯU HÀNG ĐỢI KẾT NỐI BẢO VỆ CHỐNG BÃO TẢI
+net.core.somaxconn = 65535
+net.core.netdev_max_backlog = 65535
+net.ipv4.tcp_max_syn_backlog = 65535
+
+# BỘ ĐỆM BĂNG THÔNG MẠNG CHO 10GbE / 40GbE
+net.ipv4.tcp_window_scaling = 1
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+fs.file-max = 2097152
+```
+
+### 2. Cấu Hình Docker Triển Khai Sản Xuất An Toàn (`docker-compose.yml`)
+- Cấu hình `stop_grace_period: 30s` và `stop_signal: SIGTERM`.
+- Giới hạn `ulimits.nofile: 1048576` (soft & hard).
+- Kích hoạt volume lưu trữ bền vững cho bộ đệm đĩa: `- vector_data:/var/lib/vector`.
+
+### 3. Chuẩn Hóa Cấu Hình Đường Ống Vector Core (`vector.yaml`)
+- Tất cả các source socket phải cấu hình tham số `max_length: 10485760` (10 MB) để chống OOM Bombs.
+- Tất cả các production sinks phải cấu hình bộ đệm đĩa dự phòng: `buffer.type: disk`, `buffer.max_size: 10737418240` (10 GB), `buffer.when_full: block` để tạo backpressure ngược an toàn.
+
 
 

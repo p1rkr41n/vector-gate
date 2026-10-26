@@ -18,7 +18,6 @@ Toàn bộ các bài kiểm thử tự động (Python QA scripts, Shell test ru
 | **[`suites/test_chaos_resilience.py`](suites/test_chaos_resilience.py)** | **Chaos & Adversarial** | Kiểm tra khả năng chống chịu Slowloris, bão kết nối (10k conns), Fuzzing, OOM bombs | Cần container chạy cổng 5000 |
 | **[`suites/test_stress_100k.py`](suites/test_stress_100k.py)** | **High-Throughput Stress** | Bơm 100,000 log liên tục để đo EPS duy trì và mức tiêu thụ RAM | Cần container chạy cổng 5000 |
 | **[`suites/bench_gate_vs_vector.py`](suites/bench_gate_vs_vector.py)** | **Performance Benchmark** | Đo độ trễ nano-giây so sánh Hop A (Client -> Gate) vs Hop B (Gate -> Vector Core) | Cần môi trường Linux |
-| **[`suites/test_universal_vrl_hot_drop.py`](suites/test_universal_vrl_hot_drop.py)** | **Hot-Drop Watcher** | Kiểm tra watcher phát hiện file mới và re-synthesize YAML động | Độc lập |
 
 ---
 

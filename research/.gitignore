@@ -1,0 +1,5 @@
+# Ignore large binary dumps & third-party extracted archives
+*.evtx
+*.tar.gz
+*.zip
+haproxy_analysis/haproxy-2.8.10/
