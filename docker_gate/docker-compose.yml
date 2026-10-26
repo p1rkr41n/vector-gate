@@ -3,7 +3,7 @@ version: '3.8'
 services:
   vector-gate:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     image: l1ghtg3m/vector-gate:2.4.3
     container_name: vector-smart-gate
@@ -27,4 +27,3 @@ services:
       timeout: 3s
       retries: 3
       start_period: 3s
-

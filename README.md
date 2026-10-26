@@ -1,6 +1,6 @@
-# VECTOR SMART GATE (v2.2.0)
+# VECTOR SMART GATE (v2.4.3)
 ### High-Performance Multiplexing Ingress & Zero-Port Auto-Wiring for Timberio Vector
-**Docker Hub Image:** `l1ghtg3m/vector-gate:2.2.0` | `l1ghtg3m/vector-gate:latest`  
+**Docker Hub Image:** `l1ghtg3m/vector-gate:2.4.3` | `l1ghtg3m/vector-gate:latest`  
 **Ingress Endpoint:** Single Public Port `0.0.0.0:5000` (TCP/UDP Multiplexing)  
 **Throughput:** > 5,300,000 Events/sec | **Memory Footprint:** ~23.7 MiB RAM  
 
@@ -11,6 +11,7 @@
 **Vector Smart Gate** là giải pháp Ingress thông minh tích hợp sẵn vào trước Timberio Vector Core:
 * **Hội tụ 1 Cổng Duy Nhất (`0.0.0.0:5000`)**: Thay vì phải mở hàng chục cổng firewall (`514` Syslog, `5044` Beats, `24224` Fluent, `8088` Splunk, `4318` OTel, `8125` StatsD...), toàn bộ lưu lượng dữ liệu log, metric, webhook và IoT đều gửi chung vào cổng `5000`.
 * **Zero-Port Auto-Wiring**: Định cấu hình sources trực tiếp bằng cú pháp `address: "gates.<route_name>"`. Vector Gate sẽ tự động cấp phát cổng loopback nội bộ động ngầm (`127.0.0.1:17500+`) và tái cấu trúc YAML an toàn trong bộ nhớ RAM trước khi Vector Core khởi chạy.
+* **Hierarchical Onion VRL & Auto-Remap**: Hỗ trợ thư mục parsing phân tầng (Syslog, Payload, Fallback) và tự động transpile transforms tương ứng với hot-reload watcher.
 * **Quy tắc phân loại tùy biến (Base64 Magic Bytes & Offset)**: Cho phép người dùng tùy ý nhận diện bất kỳ cấu trúc nhị phân (Hex/IoT) hoặc chuỗi ứng dụng nào theo nguyên tắc *First-Match-Wins*.
 * **Cầu chì chống nghẽn kênh (`gates.other` -> Blackhole Sink)**: Gói tin rác hoặc chữ ký lạ lập tức được xả an toàn vào `blackhole_sink`, đảm bảo cổng `5000` luôn thông suốt, không bao giờ bị treo/block kết nối.
 * **Động cơ Zero-Copy Splice Turbo-Kernel**: Sử dụng system call `splice(2)` của Linux kết hợp `SO_REUSEPORT` và `TCP_DEFER_ACCEPT`, đạt thông lượng kinh ngạc **> 5.3 triệu log/giây** mà chỉ tiêu thụ **~23.7 MiB RAM**.
@@ -19,7 +20,7 @@
 
 ## 🚀 KHỞI CHẠY NHANH (QUICK START)
 
-### 1. Triển khai bằng Docker
+### 1. Triển khai bằng Image có sẵn (Docker Hub)
 ```bash
 docker run -d \
   --name vector-smart-gate \
@@ -27,20 +28,31 @@ docker run -d \
   -p 5000:5000 \
   -v $(pwd)/docker_gate/config/vector.yaml:/etc/vector/vector.yaml:ro \
   -v $(pwd)/docker_gate/output:/var/log/vector \
-  l1ghtg3m/vector-gate:2.2.0
+  l1ghtg3m/vector-gate:2.4.3
 ```
 
-### 2. Triển khai bằng Docker Compose
+### 2. Tự Build Hoàn Chỉnh Từ Mã Nguồn (Build Image From Scratch)
+Dự án được trang bị sẵn **Multi-Stage Dockerfile** (Rust 1.80+ Builder -> Vector Runtime) cho phép tự động biên dịch và tạo image production hoàn chỉnh mà không cần cài đặt thêm bất kỳ công cụ nào trên máy chủ:
+
 ```bash
-cd docker_gate
-docker compose up -d
+# Cách 1: Sử dụng Docker Compose (Khuyên dùng)
+docker compose up -d --build
+
+# Cách 2: Sử dụng Makefile
+make build && make run
+
+# Cách 3: Sử dụng Docker CLI thuần
+docker build -t l1ghtg3m/vector-gate:2.4.3 -t l1ghtg3m/vector-gate:latest .
+docker run -d --name vector-smart-gate -p 5000:5000 l1ghtg3m/vector-gate:2.4.3
 ```
 
 ### 3. Kiểm tra container hoạt động
 ```bash
 docker ps
-# Kiểm tra bộ nhớ RAM (~23.7 MiB):
+# Kiểm tra tài nguyên RAM (~23.7 MiB):
 docker stats vector-smart-gate --no-stream
+# Gửi kiểm tra health check qua cổng 5000:
+make test
 ```
 
 ---
