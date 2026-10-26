@@ -63,6 +63,11 @@ SUITES = {
         "desc": "Pillar 1 - Universal Multi-Protocol Transport Ingress & RFC 6587",
         "requires_gate": True
     },
+    "pillar4": {
+        "file": "test_pillar4_onion_vrl.py",
+        "desc": "Pillar 4 - Universal Onion VRL & Schema Auto-Discovery",
+        "requires_gate": True
+    },
     "pillar5": {
         "file": "test_pillar5_elastic_buffer.py",
         "desc": "Pillar 5 - Elastic Buffering & Universal Deduplication",

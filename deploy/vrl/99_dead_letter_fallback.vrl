@@ -3,12 +3,44 @@
 # priority: 9999
 #---
 if !.parsed {
-    ._parse_status = "unmatched"
     msg_str = string(.message) ?? ""
-    if length(msg_str) > 32 {
-        ._raw_signature = truncate(msg_str, 32)
+
+    # Cứu trường hợp RFC 3164 cắt token JSON đầu vào .appname (ví dụ appname='{"key"' và message='"val"...}')
+    if !starts_with(msg_str, "{") && exists(.appname) && starts_with(string(.appname) ?? "", "{") {
+        msg_str = (string(.appname) ?? "") + ": " + msg_str
+    }
+
+    # 1. Thử Auto-Discover JSON
+    json_obj, json_err = parse_json(msg_str)
+    if json_err == null && is_object(json_obj) {
+        . = merge!(., json_obj)
+        .parsed = true
+        ._auto_discovered_format = "json"
+        .parser_applied = "auto_discover/json"
+    } else if contains(msg_str, "=") {
+        # 2. Thử Auto-Discover Key-Value (chỉ nhận khi có dấu '=' và ít nhất 2 cặp key=value)
+        kv_obj, kv_err = parse_key_value(msg_str)
+        if kv_err == null && is_object(kv_obj) && length(kv_obj) >= 2 {
+            . = merge!(., kv_obj)
+            .parsed = true
+            ._auto_discovered_format = "key_value"
+            .parser_applied = "auto_discover/key_value"
+        } else {
+            # 3. Fallback Raw Dead-Letter Signature (Bảo toàn 100% dữ liệu gốc)
+            ._parse_status = "unmatched"
+            if length(msg_str) > 32 {
+                ._raw_signature = truncate(msg_str, 32)
+            } else {
+                ._raw_signature = msg_str
+            }
+        }
     } else {
-        ._raw_signature = msg_str
+        # 3. Fallback Raw Dead-Letter Signature (Bảo toàn 100% dữ liệu gốc)
+        ._parse_status = "unmatched"
+        if length(msg_str) > 32 {
+            ._raw_signature = truncate(msg_str, 32)
+        } else {
+            ._raw_signature = msg_str
+        }
     }
 }
-

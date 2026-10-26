@@ -1,14 +1,33 @@
 #---
-# match_prefix: "CEF:"
+# match_contains: "CEF:"
 # scope: syslog
 # vendor: CheckPoint
 # priority: 3
 #---
-if starts_with(string!(.message), "CEF:") {
-    parsed, err = parse_regex(.message, r'^CEF:(?P<cef_ver>\d+)\|(?P<vendor>[^|]{1,64})\|(?P<product>[^|]{1,64})\|(?P<version>[^|]{1,32})\|(?P<sig_id>[^|]{1,32})\|(?P<name>[^|]{1,128})\|(?P<severity>[^|]{1,16})\|(?P<extension>.*)$')
+cef_msg = string(.message) ?? ""
+if contains(cef_msg, "CEF:") || (exists(.appname) && string!(.appname) == "CEF") {
+    # 1. Thử pattern chứa CEF: ở bất kỳ vị trí nào
+    parsed, err = parse_regex(cef_msg, r'^.*?CEF:(?P<cef_ver>\d+)\|(?P<vendor>[^|]{1,64})\|(?P<product>[^|]{1,64})\|(?P<version>[^|]{1,32})\|(?P<sig_id>[^|]{1,32})\|(?P<name>[^|]{1,128})\|(?P<severity>[^|]{1,16})\|(?P<extension>.*)$')
+    if err != null && exists(.appname) && string!(.appname) == "CEF" {
+        # 2. Nếu appname là CEF và message là 0|...
+        parsed, err = parse_regex(cef_msg, r'^(?P<cef_ver>\d+)\|(?P<vendor>[^|]{1,64})\|(?P<product>[^|]{1,64})\|(?P<version>[^|]{1,32})\|(?P<sig_id>[^|]{1,32})\|(?P<name>[^|]{1,128})\|(?P<severity>[^|]{1,16})\|(?P<extension>.*)$')
+    }
+
     if err == null {
-        . = merge(., parsed)
+        . = merge!(., parsed)
         .parsed = true
         .vendor = "CheckPoint"
+        if is_string(.extension) {
+            ext_obj, ext_err = parse_key_value(string!(.extension))
+            if ext_err == null {
+                .cef_fields = ext_obj
+                if exists(ext_obj.src) { .src_ip = ext_obj.src }
+                if exists(ext_obj.dst) { .dst_ip = ext_obj.dst }
+                if exists(ext_obj.spt) { .src_port = ext_obj.spt }
+                if exists(ext_obj.dpt) { .dst_port = ext_obj.dpt }
+                if exists(ext_obj.act) { .action = ext_obj.act }
+                if exists(ext_obj.proto) { .protocol = ext_obj.proto }
+            }
+        }
     }
 }
