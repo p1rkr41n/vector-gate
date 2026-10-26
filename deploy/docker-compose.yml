@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: l1ghtg3m/vector-gate:2.5.2
+    image: l1ghtg3m/vector-gate:2.5.5
     container_name: vector-smart-gate
     restart: unless-stopped
     stop_signal: SIGTERM
@@ -14,6 +14,7 @@ services:
       - NET_ADMIN
     ports:
       - "5000:5000"
+      - "9100:9100"
     environment:
       - RUST_LOG=info
       - VECTOR_LOG=info

@@ -72,6 +72,11 @@ SUITES = {
         "file": "test_pillar5_elastic_buffer.py",
         "desc": "Pillar 5 - Elastic Buffering & Universal Deduplication",
         "requires_gate": True
+    },
+    "pillar6": {
+        "file": "test_pillar6_observability.py",
+        "desc": "Pillar 6 - Native Observability & Self-Healing Telemetry",
+        "requires_gate": True
     }
 }
 

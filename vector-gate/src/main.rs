@@ -74,7 +74,6 @@ impl RuntimeConfig {
     }
 }
 
-#[derive(Default)]
 pub struct Stats {
     pub total_connections: AtomicU64,
     pub custom_conns: AtomicU64,
@@ -93,9 +92,82 @@ pub struct Stats {
     pub dnstap_conns: AtomicU64,
     pub http_conns: AtomicU64,
     pub raw_conns: AtomicU64,
+    pub start_time: std::time::Instant,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Self {
+            total_connections: AtomicU64::new(0),
+            custom_conns: AtomicU64::new(0),
+            syslog_conns: AtomicU64::new(0),
+            beats_conns: AtomicU64::new(0),
+            fluent_conns: AtomicU64::new(0),
+            splunk_conns: AtomicU64::new(0),
+            datadog_conns: AtomicU64::new(0),
+            aws_firehose_conns: AtomicU64::new(0),
+            heroku_conns: AtomicU64::new(0),
+            prom_rw_conns: AtomicU64::new(0),
+            prom_pg_conns: AtomicU64::new(0),
+            otel_conns: AtomicU64::new(0),
+            vector_native_conns: AtomicU64::new(0),
+            statsd_conns: AtomicU64::new(0),
+            dnstap_conns: AtomicU64::new(0),
+            http_conns: AtomicU64::new(0),
+            raw_conns: AtomicU64::new(0),
+            start_time: std::time::Instant::now(),
+        }
+    }
 }
 
 impl Stats {
+    pub fn render_prometheus(&self) -> String {
+        format!(
+            "# HELP vector_gate_total_connections_total Total client TCP connections accepted by Vector Gate\n\
+             # TYPE vector_gate_total_connections_total counter\n\
+             vector_gate_total_connections_total {}\n\
+             # HELP vector_gate_protocol_connections_total Connections classified by protocol\n\
+             # TYPE vector_gate_protocol_connections_total counter\n\
+             vector_gate_protocol_connections_total{{protocol=\"syslog\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"beats\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"fluent\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"splunk\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"datadog\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"aws_firehose\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"heroku\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"prom_rw\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"prom_pg\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"otel\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"vector_native\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"statsd\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"dnstap\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"http\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"custom\"}} {}\n\
+             vector_gate_protocol_connections_total{{protocol=\"raw\"}} {}\n\
+             # HELP vector_gate_uptime_seconds Process uptime in seconds\n\
+             # TYPE vector_gate_uptime_seconds gauge\n\
+             vector_gate_uptime_seconds {}\n",
+            self.total_connections.load(Ordering::Relaxed),
+            self.syslog_conns.load(Ordering::Relaxed),
+            self.beats_conns.load(Ordering::Relaxed),
+            self.fluent_conns.load(Ordering::Relaxed),
+            self.splunk_conns.load(Ordering::Relaxed),
+            self.datadog_conns.load(Ordering::Relaxed),
+            self.aws_firehose_conns.load(Ordering::Relaxed),
+            self.heroku_conns.load(Ordering::Relaxed),
+            self.prom_rw_conns.load(Ordering::Relaxed),
+            self.prom_pg_conns.load(Ordering::Relaxed),
+            self.otel_conns.load(Ordering::Relaxed),
+            self.vector_native_conns.load(Ordering::Relaxed),
+            self.statsd_conns.load(Ordering::Relaxed),
+            self.dnstap_conns.load(Ordering::Relaxed),
+            self.http_conns.load(Ordering::Relaxed),
+            self.custom_conns.load(Ordering::Relaxed),
+            self.raw_conns.load(Ordering::Relaxed),
+            self.start_time.elapsed().as_secs(),
+        )
+    }
+
     pub fn record(&self, condition: &RouteCondition) {
         self.total_connections.fetch_add(1, Ordering::Relaxed);
         match condition {
@@ -531,6 +603,32 @@ async fn handle_connection(
         Err(_) => 0,
     };
 
+    if n > 0 {
+        let prefix = &initial_buf[..n];
+        if prefix.starts_with(b"GET /metrics") || prefix.starts_with(b"GET /api/stats") {
+            let body = stats.render_prometheus();
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = client_stream.write_all(resp.as_bytes()).await;
+            let _ = client_stream.flush().await;
+            return;
+        }
+        if prefix.starts_with(b"GET /gate_health") {
+            let body = format!(r#"{{"status":"healthy","engine":"vector-smart-gate","uptime_sec":{}}}"#, stats.start_time.elapsed().as_secs());
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = client_stream.write_all(resp.as_bytes()).await;
+            let _ = client_stream.flush().await;
+            return;
+        }
+    }
+
     let matched_route = match sniff_unified_route(&initial_buf[..n], &config.routes) {
         Some(r) => r,
         None => {
@@ -637,6 +735,45 @@ pub fn start_gate_engine(
                 _ = stats_rx.changed() => {
                     if *stats_rx.borrow() {
                         break;
+                    }
+                }
+            }
+        }
+    });
+
+    // Dedicated Prometheus HTTP Metrics Exporter on 0.0.0.0:9100
+    let prom_stats = Arc::clone(&stats);
+    let mut prom_shutdown = shutdown_rx.clone();
+    tokio::spawn(async move {
+        let prom_addr: SocketAddr = "0.0.0.0:9100".parse().unwrap();
+        if let Ok(listener) = TcpListener::bind(prom_addr).await {
+            println!("📈 [Vector Gate Telemetry] Dedicated Prometheus exporter listening on http://0.0.0.0:9100/metrics");
+            loop {
+                tokio::select! {
+                    res = listener.accept() => {
+                        if let Ok((mut stream, _)) = res {
+                            let st = Arc::clone(&prom_stats);
+                            tokio::spawn(async move {
+                                let mut buf = [0u8; 1024];
+                                if let Ok(n) = stream.read(&mut buf).await {
+                                    if n > 0 {
+                                        let body = st.render_prometheus();
+                                        let resp = format!(
+                                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                            body.len(),
+                                            body
+                                        );
+                                        let _ = stream.write_all(resp.as_bytes()).await;
+                                        let _ = stream.flush().await;
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    _ = prom_shutdown.changed() => {
+                        if *prom_shutdown.borrow() {
+                            break;
+                        }
                     }
                 }
             }
