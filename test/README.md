@@ -18,6 +18,7 @@ Toàn bộ các bài kiểm thử tự động (Python QA scripts, Shell test ru
 | **[`suites/test_chaos_resilience.py`](suites/test_chaos_resilience.py)** | **Chaos & Adversarial** | Kiểm tra khả năng chống chịu Slowloris, bão kết nối (10k conns), Fuzzing, OOM bombs | Cần container chạy cổng 5000 |
 | **[`suites/test_stress_100k.py`](suites/test_stress_100k.py)** | **High-Throughput Stress** | Bơm 100,000 log liên tục để đo EPS duy trì và mức tiêu thụ RAM | Cần container chạy cổng 5000 |
 | **[`suites/bench_gate_vs_vector.py`](suites/bench_gate_vs_vector.py)** | **Performance Benchmark** | Đo độ trễ nano-giây so sánh Hop A (Client -> Gate) vs Hop B (Gate -> Vector Core) | Cần môi trường Linux |
+| **[`suites/test_strict_upstream_issues_reproduction.py`](suites/test_strict_upstream_issues_reproduction.py)** | **Strict Upstream Issues Audit** | Tái hiện và kiểm định 10 vấn đề người dùng thượng nguồn phản ánh (CEF quotes, trailing delimiters, ReDoS, Half-Close ACK, UTF-8) | Cần container chạy cổng 5000 |
 
 ---
 

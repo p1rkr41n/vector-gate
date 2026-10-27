@@ -40,3 +40,4 @@ echo '<14>1 2026-10-27T04:00:00Z web01 nginx 1234 - - Connection established' | 
 curl -X POST http://127.0.0.1:5000/ -H "Content-Type: application/json" -d '{"event":"test","status":"ok"}'
 ```
 Log được ghi vào thư mục `./output/forwarded_logs.ndjson`.
+

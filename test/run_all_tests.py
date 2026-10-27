@@ -82,6 +82,11 @@ SUITES = {
         "file": "test_pillar6_observability.py",
         "desc": "Pillar 6 - Native Observability & Self-Healing Telemetry",
         "requires_gate": True
+    },
+    "upstream_audit": {
+        "file": "test_strict_upstream_issues_reproduction.py",
+        "desc": "Strict Upstream User Issues & Community Bug Reproduction Audit",
+        "requires_gate": True
     }
 }
 
