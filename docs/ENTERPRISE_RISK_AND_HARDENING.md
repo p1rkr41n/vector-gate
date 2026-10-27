@@ -593,7 +593,7 @@ services:
           cpus: "2.0"
           memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:9100/health"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 3

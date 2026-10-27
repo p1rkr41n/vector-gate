@@ -140,43 +140,83 @@ Chỉ cần chạy lệnh sau để kéo Image chính thức từ Docker Hub và
 docker run -d \
   --name vector-smart-gate \
   --restart unless-stopped \
+  --cap-add NET_ADMIN \
+  --ulimit nofile=1048576:1048576 \
   -p 5000:5000 \
+  -p 9100:9100 \
   -v $(pwd)/deploy/config/vector.yaml:/etc/vector/vector.yaml:ro \
+  -v $(pwd)/deploy/vrl:/etc/vector/vrl \
   -v $(pwd)/deploy/output:/var/log/vector \
-  l1ghtg3m/vector-gate:2.2.0
+  l1ghtg3m/vector-gate:2.5.6
 ```
 
-Kiểm tra container đang chạy:
+Kiểm tra container đang chạy và trạng thái sức khỏe:
 ```bash
 docker ps -f name=vector-smart-gate
 # Xem tài nguyên tiêu thụ siêu nhẹ:
 docker stats vector-smart-gate --no-stream
+# Kiểm tra endpoint sức khỏe Gate:
+curl -sf http://127.0.0.1:9100/gate_health
 ```
 
-### 3.2. Cách 2: Khởi chạy bằng Docker Compose
-Tạo file `docker-compose.yml`:
+### 3.2. Cách 2: Khởi chạy bằng Docker Compose & Tệp Cấu Hình Hợp Nhất `.env` (Chuẩn Production)
+Toàn bộ thông số triển khai được gom gọn vào tệp `deploy/.env`. Người vận hành chỉ cần chỉnh sửa `deploy/.env` mà không cần chạm vào file Compose:
+
+```ini
+# deploy/.env
+VECTOR_GATE_IMAGE=l1ghtg3m/vector-gate:2.5.6
+CONTAINER_NAME=vector-smart-gate
+GATE_PORT=5000
+TELEMETRY_PORT=9100
+NOFILE_LIMIT=1048576
+STOP_GRACE_PERIOD=30s
+```
+
+Tệp `deploy/docker-compose.yml` cực kỳ gọn nhẹ và sạch sẽ:
 ```yaml
-version: "3.8"
+version: '3.8'
 
 services:
-  vector-smart-gate:
-    image: l1ghtg3m/vector-gate:2.2.0
-    container_name: vector-smart-gate
-    restart: unless-stopped
+  vector-gate:
+    image: ${VECTOR_GATE_IMAGE:-l1ghtg3m/vector-gate:2.5.6}
+    container_name: ${CONTAINER_NAME:-vector-smart-gate}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    stop_signal: SIGTERM
+    stop_grace_period: ${STOP_GRACE_PERIOD:-30s}
+    cap_add:
+      - NET_ADMIN
     ports:
-      - "5000:5000"
-    volumes:
-      - ./config/vector.yaml:/etc/vector/vector.yaml:ro
-      - ./output:/var/log/vector
+      - "${GATE_PORT:-5000}:5000"
+      - "${TELEMETRY_PORT:-9100}:9100"
     environment:
-      - VECTOR_LOG=info
+      - RUST_LOG=${RUST_LOG:-info}
+      - VECTOR_LOG=${VECTOR_LOG:-info}
+      - MALLOC_CONF=${MALLOC_CONF:-dirty_decay_ms:0,muzzy_decay_ms:0}
+    volumes:
+      - ${CONFIG_FILE:-./config/vector.yaml}:/etc/vector/vector.yaml:ro
+      - ${VRL_DIR:-./vrl}:/etc/vector/vrl
+      - ${LOG_OUTPUT_DIR:-./output}:/var/log/vector
+    ulimits:
+      nofile:
+        soft: ${NOFILE_LIMIT:-1048576}
+        hard: ${NOFILE_LIMIT:-1048576}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
 ```
+
+> [!NOTE]
+> **Dynamic Port & Flexible Healthcheck:** Bản Image Dockerfile `l1ghtg3m/vector-gate:2.5.6` không hardcode chỉ thị `HEALTHCHECK` cố định cổng 5000. Quyền kiểm tra sức khỏe được chuyển sang `docker-compose.yml` (hoặc Kubernetes Liveness Probe), giúp container hỗ trợ hoàn hảo khi người dùng thay đổi sang các cổng tùy biến (`GATE_PORT=8080`, `5001`, ...) mà không bao giờ bị báo `unhealthy`.
 
 Khởi chạy dịch vụ:
 ```bash
-docker compose up -d
+cd deploy
+docker-compose up -d
 # Xem log thời gian thực:
-docker compose logs -f
+docker-compose logs -f
 ```
 
 ### 3.3. Cách 3: Chạy trực tiếp Binary trên Linux

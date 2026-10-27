@@ -5,30 +5,30 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: l1ghtg3m/vector-gate:2.5.6
-    container_name: vector-smart-gate
-    restart: unless-stopped
+    image: ${VECTOR_GATE_IMAGE:-l1ghtg3m/vector-gate:2.5.6}
+    container_name: ${CONTAINER_NAME:-vector-smart-gate}
+    restart: ${RESTART_POLICY:-unless-stopped}
     stop_signal: SIGTERM
-    stop_grace_period: 30s
+    stop_grace_period: ${STOP_GRACE_PERIOD:-30s}
     cap_add:
       - NET_ADMIN
     ports:
-      - "5000:5000"
-      - "9100:9100"
+      - "${GATE_PORT:-5000}:5000"
+      - "${TELEMETRY_PORT:-9100}:9100"
     environment:
-      - RUST_LOG=info
-      - VECTOR_LOG=info
-      - MALLOC_CONF=dirty_decay_ms:0,muzzy_decay_ms:0
+      - RUST_LOG=${RUST_LOG:-info}
+      - VECTOR_LOG=${VECTOR_LOG:-info}
+      - MALLOC_CONF=${MALLOC_CONF:-dirty_decay_ms:0,muzzy_decay_ms:0}
     volumes:
-      - ./config/vector.yaml:/etc/vector/vector.yaml:ro
-      - ./vrl:/etc/vector/vrl
-      - ./output:/var/log/vector
+      - ${CONFIG_FILE:-./config/vector.yaml}:/etc/vector/vector.yaml:ro
+      - ${VRL_DIR:-./vrl}:/etc/vector/vrl
+      - ${LOG_OUTPUT_DIR:-./output}:/var/log/vector
     ulimits:
       nofile:
-        soft: 1048576
-        hard: 1048576
+        soft: ${NOFILE_LIMIT:-1048576}
+        hard: ${NOFILE_LIMIT:-1048576}
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:5000/", "-X", "POST", "-d", "healthcheck"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 3

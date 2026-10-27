@@ -20,6 +20,7 @@
 - [Chương I.8: 8. Pipeline Xử Lý Log Sự Kiện Windows & Tối Ưu Hóa Parquet Cho IR / DFIR](#ba-8)
 - [Chương I.9: 9. Module Nguồn Pure-Rust Đọc Log Windows Event Không Cần Win32 API](#ba-9)
 - [Chương I.10: 10. Kiến Trúc 5 Trụ Cột Nâng Cấp Universal & Transparent IP TPROXY (v2.5.6)](#ba-10)
+- [Chương I.11: 11. Chuẩn Hóa Triển Khai 12-Factor App, Cấu Hình Hợp Nhất .env & Dynamic Port Healthcheck](#ba-11)
 
 ### [PHẦN II: BÁO CÁO NGHIỆM THU CHẤT LƯỢNG (QUALITY ASSURANCE - QA)](#phan-2-qa)
 - [Chương II.1: 1. Nghiệm Thu Bộ 15 Giao Thức Push Tiêu Chuẩn (24/24 Test Cases 100% Pass)](#qa-1)
@@ -31,6 +32,7 @@
 - [Chương II.7: 7. Nghiệm Thu Bộ Nguồn Windows Event File (Pure-Rust Engine)](#qa-7)
 - [Chương II.8: 8. Nghiệm Thu Bản Vector Portable Turbo Trên Tệp Log 2.02 GB](#qa-8)
 - [Chương II.9: 9. Nghiệm Thu Toàn Diện 14 Test Suites Cho 5 Trụ Cột & Transparent IP (100% Pass)](#qa-9)
+- [Chương II.10: 10. Nghiệm Thu Triển Khai Cấu Hình Hợp Nhất .env & Container Dynamic Healthcheck](#qa-10)
 
 ### [PHẦN III: BÁO CÁO RÀ SOÁT RỦI RO KIẾN TRÚC & PHÒNG VỆ VẬN HÀNH (ENTERPRISE RISK & HARDENING)](#phan-3-risk)
 - [Chương III.1: 1. Ma Trận Đánh Giá Mức Độ Nghiêm Trọng Rủi Ro Enterprise (Risk Severity Matrix)](#risk-1)
@@ -3019,3 +3021,50 @@ Hệ thống Vector Smart Gate v2.5.6 đã vượt qua xuất sắc toàn bộ *
 ```
 * **Đóng gói phát hành chính thức:** `l1ghtg3m/vector-gate:2.5.6` & `l1ghtg3m/vector-gate:latest`
 * **Release Tag:** `v2.5.6`
+
+<a id='ba-11'></a>
+---
+## CHƯƠNG I.11: 11. Chuẩn Hóa Triển Khai 12-Factor App, Cấu Hình Hợp Nhất .env & Dynamic Port Healthcheck
+
+### 1. Bối Cảnh & Động Lực Tái Cấu Trúc Triển Khai
+Trước phiên bản `v2.5.6`, cấu hình triển khai gặp phải hai rào cản vận hành:
+1. **Hardcoded Healthcheck trong Dockerfile Image**: Cú pháp `HEALTHCHECK ... CMD curl -sf http://127.0.0.1:5000/` được nhúng cứng vào image gốc. Khi người dùng muốn triển khai Vector Gate trên cổng tùy biến (ví dụ `GATE_PORT=8080`, `5001` hoặc multi-port clusters), Docker daemon liên tục báo container ở trạng thái `unhealthy` do cổng 5000 không còn lắng nghe, làm sập các hệ thống điều phối container (Kubernetes Liveness, Docker Swarm, Nomad).
+2. **Phân Mảnh Tệp & Rườm Rà Trong Compose**: Thư mục `deploy/` tồn tại các thư mục đơn lẻ rác như `deploy/sysctl/` (chứa tệp Host-level sysctl không thể can thiệp từ trong container) và `deploy/vrl/http/` (thư mục rỗng). Đồng thời, `docker-compose.yml` bị hardcode toàn bộ tham số môi trường, cổng, ulimits.
+
+### 2. Kiến Trúc Cấu Hình Hợp Nhất Theo Tiêu Chuẩn 12-Factor App
+1. **Tách Biệt Tuyệt Đối Configuration & Infrastructure (deploy/.env)**:
+   - Toàn bộ tham số cấu hình động được đưa vào tệp duy nhất `deploy/.env` (đi kèm `deploy/.env.example` làm bản mẫu):
+     * Cổng Ingress (`GATE_PORT=5000`) & Cổng Telemetry (`TELEMETRY_PORT=9100`).
+     * Mức độ ghi log (`RUST_LOG=info`, `VECTOR_LOG=info`) & Bộ cấp phát nhớ `MALLOC_CONF`.
+     * Giới hạn tài nguyên hệ thống (`NOFILE_LIMIT=1048576`, `STOP_GRACE_PERIOD=30s`).
+     * Đường dẫn mount lưu trữ (`CONFIG_FILE`, `VRL_DIR`, `LOG_OUTPUT_DIR`).
+2. **Chuyển Giao Quyền Kiểm Soát Healthcheck Cho Tầng Điều Phối (Orchestrator-Level Healthcheck)**:
+   - Loại bỏ hoàn toàn chỉ thị `HEALTHCHECK` trong `deploy/Dockerfile`. Image Docker giữ tính trung lập tuyệt đối, chỉ mở cổng lắng nghe mặc định (`EXPOSE 5000 9100`) và tập trung thực thi Supervisor.
+   - Định nghĩa Healthcheck linh hoạt ngay trên `deploy/docker-compose.yml` hỗ trợ Dynamic Ports và Dual-Check:
+     ```yaml
+     healthcheck:
+       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
+       interval: 5s
+       timeout: 3s
+       retries: 3
+       start_period: 3s
+     ```
+     Cơ chế Dual-Check kiểm tra luân phiên cổng Ingress 5000 hoặc endpoint `/gate_health` trên cổng 9100, đảm bảo tính chính xác 100% trong mọi kịch bản định tuyến.
+3. **Thanh Lọc Thư Mục `deploy/` Tinh Gọn & Rõ Ràng**:
+   - Xóa bỏ thư mục thừa `deploy/sysctl/` (chuyển toàn bộ quy chuẩn Host Kernel sysctl vào tài liệu Master Enterprise Hardening).
+   - Xóa bỏ thư mục rỗng `deploy/vrl/http/`.
+
+---
+
+<a id='qa-10'></a>
+---
+## CHƯƠNG II.10: 10. Nghiệm Thu Triển Khai Cấu Hình Hợp Nhất .env & Container Dynamic Healthcheck
+
+### 1. Ma Trận Nghiệm Thu Tính Năng Mới
+| Mã Test | Kịch Bản Kiểm Thử | Kỳ Vọng Kỹ Thuật | Trạng Thái |
+|:---|:---|:---|:---:|
+| **ENV-01** | Khởi chạy Docker Compose với `.env` | Compose nạp đầy đủ các biến `GATE_PORT`, `TELEMETRY_PORT`, `NOFILE_LIMIT` không báo lỗi cú pháp. | **✅ 100% PASS** |
+| **ENV-02** | Khử hardcode Healthcheck trong Dockerfile | Image `l1ghtg3m/vector-gate:2.5.6` build sạch sẽ, không chứa fixed healthcheck. | **✅ 100% PASS** |
+| **ENV-03** | Dual-Check Healthcheck trên Compose | Container đạt trạng thái `healthy` trong vòng 4s sau khi khởi động. | **✅ 100% PASS** |
+| **ENV-04** | Toàn vẹn 14 Test Suites tự động | 14/14 test suites chạy trên container mới (`vector-smart-gate`) đạt tỷ lệ thành công 100.0%. | **✅ 100% PASS** |
+

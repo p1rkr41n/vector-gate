@@ -54,12 +54,8 @@ RUN mkdir -p /var/log/vector /var/lib/vector /etc/vector/vrl /tmp && \
 COPY deploy/vrl/ /etc/vector/vrl/
 RUN chmod -R 777 /etc/vector/vrl
 
-# Expose the polymorphic ingress port
-EXPOSE 5000
-
-# Health check ensuring single-port gate is responding
-HEALTHCHECK --interval=5s --timeout=3s --retries=3 \
-  CMD curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || exit 1
+# Expose the default ingress and telemetry ports (dynamic ports can be mapped via compose)
+EXPOSE 5000 9100
 
 # Supervised entrypoint: Vector Gate launches and supervises Vector Core
 ENTRYPOINT ["/usr/local/bin/vector-gate", "run", "-c", "/etc/vector/vector.yaml"]
