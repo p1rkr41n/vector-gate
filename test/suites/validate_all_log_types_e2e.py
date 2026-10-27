@@ -87,6 +87,15 @@ def main():
     print("🚀 VALIDATING ALL LOG TYPES & SOURCES ROUTING ON VECTOR GATE (PORT 5000)")
     print("=" * 80)
 
+    # Clean previous output log to prevent reading stale entries from previous suites
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                pass
+        except Exception:
+            pass
+    time.sleep(0.3)
+
     results = []
 
     # 1. Custom Binary IoT (0xDEADBEEF)

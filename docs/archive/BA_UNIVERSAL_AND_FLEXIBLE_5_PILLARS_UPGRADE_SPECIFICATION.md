@@ -258,3 +258,4 @@ python3 test/run_all_tests.py --all
 Bản nâng cấp **Enterprise Release `v2.5.6`** đã giải quyết triệt để toàn bộ các điểm nghẽn về tương thích giao thức, an toàn đệm đĩa, ngữ nghĩa log tường lửa, bảo toàn địa chỉ mạng, quan sát đo lường và tối ưu hóa tài nguyên nhân Linux.
 
 * **Bước tiếp theo:** Tập trung nghiên cứu chuyên sâu **Trụ Cột 3: Smart Protocol Transpilation Engine** (Chuyển đổi giao thức cấp cao mà không cần giải mã tầng ứng dụng) theo đúng chỉ đạo của Ban quản lý dự án.
+

@@ -194,7 +194,7 @@ if err == null {
     finally:
         if os.path.exists(snort_vrl_path):
             os.remove(snort_vrl_path)
-            time.sleep(1.0)
+            time.sleep(2.5) # Wait for watcher debounce + SIGHUP restore
             print("  [CLEANUP] Removed temporary 04_snort.vrl")
 
     print("\n" + "=" * 80)

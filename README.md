@@ -76,11 +76,12 @@ vector-gate/
 ---
 
 ## 📋 TÀI LIỆU HƯỚNG DẪN CHI TIẾT
-* 📖 [**docs/USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](docs/USER_GUIDE.md): Tài liệu hướng dẫn đầy đủ nhất từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức và chữ ký tùy biến.
+* 📚 [**docs/MASTER_SPECIFICATION.md** (Hồ sơ Thiết kế Kỹ thuật & Báo cáo Nghiệm thu Master)](docs/MASTER_SPECIFICATION.md): Tài liệu tổng hợp toàn diện bao gồm toàn bộ Phân tích nghiệp vụ (BA), Kiến trúc Kỹ thuật, và Nghiệm thu chất lượng (QA) của toàn hệ thống Vector Gate v2.5.6 (Single Source of Truth).
+* 📖 [**docs/USER_GUIDE.md** (Hướng dẫn cấu hình & Sổ tay kiểm thử tương tác)](docs/USER_GUIDE.md): Sổ tay vận hành thực chiến từ A-Z với các lệnh test mẫu (curl, netcat, python) cho 15 giao thức, chữ ký tùy biến, Transparent IP TPROXY, và giám sát Prometheus.
+* 🛡️ [**docs/ENTERPRISE_RISK_AND_HARDENING.md** (Quản Trị Rủi Ro Enterprise, Upstream Issues & Runbooks)](docs/ENTERPRISE_RISK_AND_HARDENING.md): Phân tích ma trận rủi ro P0-P2, đối soát 641 issues upstream Vector/VRL, 6 Runbooks ứng phó sự cố khẩn cấp, và quy chuẩn tinh chỉnh nhân Linux.
+* 🗄️ [**docs/archive/** (Kho Lưu Trữ Tài Liệu Lịch Sử & Phase Reports)](docs/archive/): Lưu trữ các bản nháp nghiên cứu, đề xuất kiến trúc ban đầu và báo cáo chaos test phục vụ công tác đối soát lịch sử.
 * 🧪 [**test/README.md** (Thư Mục Kiểm Thử Tự Động Hóa Tập Trung)](test/README.md): Bộ QA test suites tự động hóa (Python) gồm Standard Vector Matrix, Onion VRL, 15 Giao thức Ingress, Chaos Engineering, và runner [`test/run_all_tests.py`](test/run_all_tests.py).
 * 📦 [**test/samples/README.md** (Bộ Dữ Liệu Mẫu & Test Dispatcher)](test/samples/README.md): Bảng tra cứu 15 giao thức mẫu và script bắn test tự động [`test/samples/send_samples.py`](test/samples/send_samples.py).
-* 🔬 [**docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md** (Báo Cáo Đối Soát 641 Issues Upstream)](docs/VRL_AND_VECTOR_ISSUES_AUDIT_REPORT.md): Phân tích chi tiết 8 Use Cases trọng yếu, đánh giá khả năng sửa lỗi & năng lực phòng vệ 641 issues VRL trên Vector Gate v2.4.3.
-* 📚 [**docs/MASTER_SPECIFICATION.md** (Hồ sơ Thiết kế Kỹ thuật & Báo cáo Nghiệm thu Master)](docs/MASTER_SPECIFICATION.md): Tài liệu tổng hợp toàn diện bao gồm toàn bộ Phân tích nghiệp vụ (BA) và Nghiệm thu chất lượng (QA) của toàn hệ thống Vector Gate (Single Source of Truth).
 
 ---
 
