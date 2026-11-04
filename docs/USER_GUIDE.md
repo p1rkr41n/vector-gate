@@ -201,7 +201,7 @@ services:
         soft: ${NOFILE_LIMIT:-1048576}
         hard: ${NOFILE_LIMIT:-1048576}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/gate_health || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 3

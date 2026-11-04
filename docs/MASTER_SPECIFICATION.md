@@ -3043,7 +3043,7 @@ Trước phiên bản `v2.5.6`, cấu hình triển khai gặp phải hai rào c
    - Định nghĩa Healthcheck linh hoạt ngay trên `deploy/docker-compose.yml` hỗ trợ Dynamic Ports và Dual-Check:
      ```yaml
      healthcheck:
-       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -X POST -d 'healthcheck' || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
+       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/gate_health || curl -sf http://127.0.0.1:9100/gate_health || exit 1"]
        interval: 5s
        timeout: 3s
        retries: 3
