@@ -366,12 +366,25 @@ transforms:
     inputs: ["tag_*"]
     dir: "/etc/vector/vrl"
 
+  # SIEM Enrich: Chuẩn hóa @timestamp cho Kibana & SIEM
+  siem_enrich:
+    type: remap
+    inputs: ["universal_parser", "fallback_other_unmatched"]
+    source: |
+      if !exists(.@timestamp) {
+        if exists(.timestamp) {
+          .@timestamp = .timestamp
+        } else {
+          .@timestamp = now()
+        }
+      }
+
 # PHASE 3: SINKS
 sinks:
   # Primary Data File Sink: Ghi toàn bộ các log sau khi qua Universal Parser & fallback
   file_output:
     type: file
-    inputs: ["universal_parser", "fallback_other_unmatched"]
+    inputs: ["siem_enrich"]
     path: "/var/log/vector/forwarded_logs.ndjson"
     encoding:
       codec: json
@@ -379,6 +392,28 @@ sinks:
       type: disk
       max_size: 10737418240 # 10GB disk buffer
       when_full: drop_newest # Van an toàn: Loại bỏ nguy cơ Pipeline Deadlock / Freeze cổng Ingress khi đĩa đầy
+
+  # SIEM Sink: Elasticsearch 8.x endpoint trên 172.18.219.16
+  elasticsearch_siem:
+    type: elasticsearch
+    inputs: ["siem_enrich"]
+    endpoints: ["http://172.18.219.16:9200"]
+    auth:
+      strategy: basic
+      user: "manager"
+      password: "1qaz!QAZ2wsx@WSX"
+    mode: "bulk"
+    bulk:
+      action: "create"
+      index: "vector-%Y.%m.%d"
+    batch:
+      max_bytes: 5242880
+      max_events: 1000
+      timeout_secs: 1.0
+    buffer:
+      type: disk
+      max_size: 5368709120 # 5GB disk buffer
+      when_full: drop_newest
 
   # Blackhole Sink cho unmatched traffic & unconsumed telemetry streams
   blackhole_sink:
