@@ -23,8 +23,8 @@ import urllib.parse
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SUITES_DIR = os.path.join(ROOT_DIR, "test", "suites")
 
-TELE_TOKEN = "8735945052:AAFvEYN0vkBV5tJKu8xMyWbPOtoCY14x-Qg"
-TELE_CHAT_ID = "1272211313"
+TELE_TOKEN = 
+TELE_CHAT_ID = 
 
 class Colors:
     GREEN = "\033[92m"
