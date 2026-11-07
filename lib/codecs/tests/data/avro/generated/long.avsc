@@ -1,0 +1,1 @@
+{"type":"record","name":"test","fields":[{"name":"long_field","type":"long","default":0}]}

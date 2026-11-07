@@ -1,40 +1,28 @@
 # Vector Smart Gate
 
-High-Performance Multi-Gate Multiplexing Ingress Engine written in Rust.
+**High-Performance Multi-Gate Multiplexing Ingress & Unified Observability Pipeline**
 
-`vector-gate` provides a zero-copy, low-latency TCP ingress proxy and magic protocol recognizer designed to demultiplex high-volume log streams into downstream ingestion pipelines (such as Timberio Vector).
+Vector Smart Gate merges upstream **Timberio Vector (v0.58.0)** with the **Vector Smart Gate** high-performance zero-copy ingress multiplexer into a unified repository and application.
 
-## Key Features
+---
 
-- **Linux Zero-Copy Kernel Splice**: Uses `splice(2)` system calls with circular pipe buffers to achieve ultra-high throughput with minimal CPU and memory overhead.
-- **Kernel Socket Optimizations**: Built-in support for `SO_REUSEPORT`, `TCP_DEFER_ACCEPT`, and `TCP_NODELAY`.
-- **Intelligent Stream Recognition**: Inspects initial bytes (magic bytes/headers) within configurable timeouts to auto-route streams (Beats, Syslog RFC3164/RFC5424, HTTP/NDJSON, Splunk HEC, Datadog Intake, CEF, etc.).
-- **Multi-Gate Architecture**: Supports multiple distinct gates running concurrently on separate network endpoints.
-- **Fail-Safe Routing**: Dedicated dead-letter/fallback routing for unrecognized payloads to prevent ingestion head-of-line blocking.
+## 🌟 Key Architectural Capabilities
 
-## Requirements
+1. **Embedded Ingress Engine (`lib/vector-gate`)**:
+   - **Linux Kernel Splice Turbo-Engine**: Uses `splice(2)` zero-copy pipe transfers for maximum throughput with minimal CPU overhead.
+   - **Multi-Gate Declarative Routing**: Exposes multiple independent gates (e.g. `main_gate:5000`, `dmz_gate:5045`) concurrently.
+   - **Protocol Auto-Recognition**: Automatic magic-byte inspection for Beats, Syslog (RFC3164/RFC5424), HTTP NDJSON, Generic JSON, CEF, Cisco ASA, and Fortigate.
+   - **Dead-Letter Terminal**: Isolated per-gate fallback sink preventing head-of-line blocking on unknown payloads.
 
-- **OS**: Linux (kernel 4.x or later with `splice(2)` support)
-- **Rust Toolchain**: Rust 2021 edition (`rustc` >= 1.70, `cargo`)
+2. **Full Observability Data Pipeline (Vector Core)**:
+   - 100+ native sources, transforms, and sinks (Elasticsearch, OpenSearch, ClickHouse, S3, Kafka, Datadog, Prometheus, etc.).
+   - Ultra-fast Vector Remap Language (VRL) data transformation.
 
-## Building from Source
+---
 
-```bash
-cd vector-gate
-cargo build --release
-```
+## 🚀 Unified Configuration (`vector.yaml`)
 
-The compiled binary will be located at `vector-gate/target/release/vector-gate`.
-
-## Configuration & Usage
-
-`vector-gate` can parse configuration from a unified YAML configuration file:
-
-```bash
-./vector-gate/target/release/vector-gate [path/to/config.yaml]
-```
-
-### Configuration Example
+With Vector Smart Gate, you declare ingress gates directly inside your `vector.yaml`:
 
 ```yaml
 gates:
@@ -51,8 +39,65 @@ gates:
       beats: 127.0.0.1:5044
       http: 127.0.0.1:8080
       other: 127.0.0.1:9999
+
+sources:
+  gate_syslog:
+    type: syslog
+    mode: tcp
+    address: 127.0.0.1:5140
+
+  gate_beats:
+    type: file
+    # or native beats source
+
+sinks:
+  console_out:
+    type: console
+    inputs: ["gate_syslog"]
+    encoding:
+      codec: json
 ```
 
-## License
+When Vector starts, if the `gates:` block is defined in the configuration, the embedded `vector-gate` engine automatically initializes, binds the gate sockets, and begins splicing incoming traffic to internal pipeline sources. If `gates:` is omitted, Vector runs in standard upstream mode.
 
-This project is licensed under the Mozilla Public License 2.0 (MPL-2.0). See [LICENSE](LICENSE) for details.
+---
+
+## 🛠️ Building from Source
+
+### Standalone Gate Binary (`vector-gate`)
+To build only the lightweight high-performance ingress proxy binary:
+
+```bash
+cargo build -p vector-gate --release --bin vector-gate
+```
+Output: `target/release/vector-gate`
+
+### Unified Vector Engine
+To compile the complete unified Vector binary:
+
+```bash
+cargo build --release --bin vector
+```
+Output: `target/release/vector`
+
+---
+
+## 📁 Repository Structure
+
+```
+.
+├── Cargo.toml               # Workspace manifest including lib/vector-gate
+├── lib/
+│   ├── vector-gate/         # Vector Smart Gate ingress crate (Splice, Multi-Gate, Magic Sniffer)
+│   ├── vector-core/         # Core Vector pipeline data model and topologies
+│   ├── vector-vrl/          # Vector Remap Language compiler & runtime
+│   └── ...                  # Codecs, buffers, and protocol definitions
+├── src/                     # Main Vector application entrypoint & runtime
+└── config/                  # Configuration templates and examples
+```
+
+---
+
+## 📄 License
+
+Vector Smart Gate is licensed under the Mozilla Public License 2.0 (MPL-2.0). See [LICENSE](LICENSE) for details.

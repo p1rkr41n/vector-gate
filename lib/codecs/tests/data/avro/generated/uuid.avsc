@@ -1,0 +1,1 @@
+{"type":"record","name":"test","fields":[{"name":"uuid_field","type":{"type":"string","logicalType":"uuid"}}]}
