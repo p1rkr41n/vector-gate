@@ -1,8 +1,18 @@
-# Git & JJ Ignore for vectormod
+# Git & JJ Ignore for vector-gate
 
-# Trash directory for retired files
+# Excluded non-core components (local only, do not track in Git)
+.dockerignore
+deploy/
+docs/
+research/
+test/
+
+# Trash & temporary files
 trash/
 tele_offset.txt
+.last_offset
+inbox_history.jsonl
+.agents/
 
 # Large data & archives
 *.zip
@@ -17,29 +27,13 @@ vector-portable/
 # Cargo build artifacts
 target/
 **/target/
-Cargo.lock
 
-# Test outputs & logs
-deploy/output/
-deploy/bin/
-test/bin/
+# Logs & temp outputs
 *.log
 *.ndjson
 *.jsonl
-inbox_history.jsonl
-.last_offset
-# Antigravity agent skills and local daemon data
-.agents/
-
 __pycache__/
 *.pyc
 
-vrl-mod/bin/
-vrl-mod/scratch/
-vrl-mod/tests/qa_data/*.evtx
-
-# Analysis tarballs
-haproxy_analysis/haproxy-2.8.tar.gz
-haproxy_analysis/haproxy-2.8.10/
-
-test/bin/
+vrl-mod/
+haproxy_analysis/
